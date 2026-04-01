@@ -1,0 +1,13 @@
+[package]
+name = "application"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+domain = { path = "../domain" }
+thiserror.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+serde.workspace = true
+async-trait.workspace = true

@@ -1,0 +1,8 @@
+[package]
+name = "shared-config"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+dotenvy.workspace = true

@@ -1,0 +1,13 @@
+[package]
+name = "adapters-media-store"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+domain = { path = "../domain" }
+application = { path = "../application" }
+tokio.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+uuid.workspace = true

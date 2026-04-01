@@ -1,0 +1,16 @@
+[package]
+name = "adapters-voice"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+domain = { path = "../domain" }
+application = { path = "../application" }
+
+songbird.workspace = true
+serenity.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

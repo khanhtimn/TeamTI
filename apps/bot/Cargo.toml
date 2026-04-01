@@ -1,0 +1,20 @@
+[package]
+name = "bot"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+application = { path = "../../crates/application" }
+domain = { path = "../../crates/domain" }
+adapters-discord = { path = "../../crates/adapters-discord" }
+adapters-voice = { path = "../../crates/adapters-voice" }
+adapters-persistence = { path = "../../crates/adapters-persistence" }
+adapters-media-store = { path = "../../crates/adapters-media-store" }
+shared-config = { path = "../../crates/shared-config" }
+shared-observability = { path = "../../crates/shared-observability" }
+
+tokio.workspace = true
+serenity.workspace = true
+songbird.workspace = true
+tracing.workspace = true

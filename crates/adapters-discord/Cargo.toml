@@ -1,0 +1,13 @@
+[package]
+name = "adapters-discord"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+domain = { path = "../domain" }
+application = { path = "../application" }
+
+serenity.workspace = true
+tokio.workspace = true
+tracing.workspace = true

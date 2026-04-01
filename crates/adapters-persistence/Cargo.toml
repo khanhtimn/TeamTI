@@ -1,0 +1,18 @@
+[package]
+name = "adapters-persistence"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+domain = { path = "../domain" }
+application = { path = "../application" }
+
+sqlx.workspace = true
+tokio.workspace = true
+serde.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
