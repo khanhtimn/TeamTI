@@ -6,6 +6,8 @@ pub struct MediaAsset {
     pub title: String,
     pub origin: MediaOrigin,
     pub duration_ms: Option<u64>,
+    pub content_hash: Option<String>,
+    pub original_filename: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

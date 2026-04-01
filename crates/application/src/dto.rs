@@ -1,7 +1,2 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LocalMediaRegistrationResult {
-    pub asset_id: uuid::Uuid,
-    pub title: String,
-}
+// DTOs for application layer results are defined here.
+// LocalMediaRegistrationResult was removed — play now uses catalog lookup.

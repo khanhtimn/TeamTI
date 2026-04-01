@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO media_assets (id, title, origin_type, origin_rel_path, origin_remote_url, duration_ms, content_hash, original_filename)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n            ON CONFLICT (id) DO UPDATE\n            SET title = $2, origin_type = $3, origin_rel_path = $4, origin_remote_url = $5,\n                duration_ms = $6, content_hash = $7, original_filename = $8\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e89fe8d7566ae5cd7d868e728979ac094d0dff3bd3d42301f433bc6c6b972254"
+}

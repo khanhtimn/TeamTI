@@ -5,8 +5,12 @@ use domain::guild::GuildId;
 use domain::playback::{EnqueueRequest, QueueRequest, StartVoiceChannel};
 use serenity::model::id::ChannelId as SerenityChannelId;
 use serenity::model::id::GuildId as SerenityGuildId;
+use songbird::events::{CoreEvent, TrackEvent};
 use songbird::Songbird;
 use std::sync::Arc;
+use tracing::{debug, error, info};
+
+use crate::event_handler::SongbirdEventLogger;
 
 pub struct SongbirdPlaybackGateway {
     songbird: Arc<Songbird>,
@@ -26,12 +30,33 @@ impl PlaybackGateway for SongbirdPlaybackGateway {
         let guild_id = SerenityGuildId::new(req.guild_id.0);
         let channel_id = SerenityChannelId::new(channel_id);
 
-        let _call = self
+        info!(%guild_id, %channel_id, "Joining voice channel");
+
+        let call = self
             .songbird
             .join(guild_id, channel_id)
             .await
             .map_err(|e| DomainError::InvalidState(format!("Failed to join voice: {:?}", e)))?;
 
+        // Register global event handlers for driver + track lifecycle diagnostics
+        {
+            let mut handler = call.lock().await;
+
+            // Driver connection events
+            handler.add_global_event(CoreEvent::DriverConnect.into(), SongbirdEventLogger);
+            handler.add_global_event(CoreEvent::DriverDisconnect.into(), SongbirdEventLogger);
+            handler.add_global_event(CoreEvent::DriverReconnect.into(), SongbirdEventLogger);
+
+            // Track lifecycle events (global = fires for all tracks)
+            handler.add_global_event(TrackEvent::Play.into(), SongbirdEventLogger);
+            handler.add_global_event(TrackEvent::End.into(), SongbirdEventLogger);
+            handler.add_global_event(TrackEvent::Error.into(), SongbirdEventLogger);
+            handler.add_global_event(TrackEvent::Playable.into(), SongbirdEventLogger);
+
+            info!(%guild_id, "Registered voice event handlers");
+        }
+
+        info!(%guild_id, "Successfully joined voice channel");
         Ok(())
     }
 
@@ -41,6 +66,7 @@ impl PlaybackGateway for SongbirdPlaybackGateway {
             .leave(g_id)
             .await
             .map_err(|e| DomainError::InvalidState(format!("Failed to leave voice: {:?}", e)))?;
+        info!(?guild_id, "Left voice channel");
         Ok(())
     }
 
@@ -50,17 +76,24 @@ impl PlaybackGateway for SongbirdPlaybackGateway {
         if let Some(call) = self.songbird.get(guild_id) {
             let mut handler = call.lock().await;
 
+            debug!(?req.source, "Mapping domain source to songbird input");
+
             // Map domain source to songbird source
             let source = crate::mapper::map_playable_to_songbird(req.source).await?;
 
             // Just using built in queue for v1
             handler.enqueue(source.into()).await;
 
+            let queue_len = handler.queue().len();
+            info!(%guild_id, queue_len, "Track enqueued successfully");
+
             Ok(())
         } else {
+            error!(%guild_id, "Attempted to enqueue but bot is not in a voice channel");
             Err(DomainError::InvalidState(
                 "Bot is not in voice channel".into(),
             ))
         }
     }
 }
+

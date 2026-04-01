@@ -1,3 +1,8 @@
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["TeamTI"]
+
 [workspace]
 members = ["apps/*", "crates/*"]
 resolver = "2"
@@ -7,13 +12,21 @@ resolver = "2"
 tokio = { version = "1.43", features = ["full"] }
 
 # Discord & Voice
-serenity = { version = "0.12", features = [
-    "client",
+serenity = { git = "https://github.com/serenity-rs/serenity", branch = "next", features = [
     "gateway",
     "rustls_backend",
     "model",
+    "cache",
+    "voice",
 ] }
-songbird = { version = "0.5.0", features = ["driver", "rustls", "serenity", "builtin-queue"] }
+songbird = { git = "https://github.com/serenity-rs/songbird", branch = "serenity-next", features = [
+    "driver",
+    "rustls",
+    "serenity",
+    "builtin-queue",
+] }
+symphonia = { version = "0.5", features = ["mp3", "wav"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 
 # Persistence
 sqlx = { version = "0.8", features = [
@@ -37,11 +50,3 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15"
 async-trait = "0.1"
-
-[workspace.package]
-version = "0.1.0"
-edition = "2024"
-authors = ["TeamTI"]
-
-[patch.crates-io]
-audiopus_sys = { git = "https://github.com/amsam0/audiopus_sys" }
