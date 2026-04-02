@@ -13,7 +13,7 @@ env:
   REGISTRY: docker.io
   # Reduce compile time.
   RUSTFLAGS: -Zshare-generics=y -Zthreads=0
-  IMAGE_NAME: khanhtimn/teamti-music-bot
+  IMAGE_NAME: khanhtimn/teamti_music_bot
   
 jobs:
   build-and-push:

@@ -39,10 +39,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/bot /app/teamti-music-bot
+COPY --from=builder /app/target/release/bot /app/teamti_music_bot
 COPY --from=builder /app/migrations /app/migrations
 
 ENV RUST_LOG="info"
 VOLUME ["/app/media_data"]
 
-CMD ["/app/teamti-music-bot"]
+CMD ["/app/teamti_music_bot"]

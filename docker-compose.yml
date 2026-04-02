@@ -10,17 +10,17 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
       interval: 5s
       timeout: 3s
       retries: 5
 
   bot:
-    image: khanhtimn/teamti-music-bot:latest
+    image: khanhtimn/teamti_music_bot:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: teamti-music-bot
+    container_name: teamti_music_bot
     restart: unless-stopped
     depends_on:
       db:
