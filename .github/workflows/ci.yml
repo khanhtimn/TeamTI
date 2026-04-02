@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Nightly optimizations: parallel codegen, shared generics, warnings as errors
+  RUSTFLAGS: -Dwarnings -Zshare-generics=y -Zthreads=0
+  RUSTDOCFLAGS: -Dwarnings -Zshare-generics=y -Zthreads=0
+  SQLX_OFFLINE: true
+  # sccache
+  SCCACHE_GHA_ENABLED: true
+  RUSTC_WRAPPER: sccache
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake pkg-config libopus-dev libssl-dev
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.7
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake pkg-config libopus-dev libssl-dev
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.7
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci
+          save-if: false
+
+      - name: Cargo check
+        run: cargo check --workspace
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Use cranelift backend for tests — faster compilation, adequate runtime
+      RUSTFLAGS: -Dwarnings -Zshare-generics=y -Zthreads=0 -Zcodegen-backend=cranelift
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustc-codegen-cranelift-preview
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake pkg-config libopus-dev libssl-dev
+
+      - name: Set up sccache
+        uses: mozilla-actions/sccache-action@v0.0.7
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: test
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Run tests
+        run: cargo test --workspace --all-targets --no-fail-fast

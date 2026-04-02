@@ -1,0 +1,9 @@
+target/
+.git/
+.env
+.vscode/
+docs/
+data/
+media_data/
+*.md
+!README.md
