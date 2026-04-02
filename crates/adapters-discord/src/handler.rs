@@ -11,7 +11,7 @@ use serenity::prelude::*;
 use std::sync::Arc;
 use tracing::{error, info, warn};
 
-use application::ports::media_repository::MediaRepository;
+use application::ports::search::MediaSearchPort;
 use application::services::{
     enqueue_track::EnqueueTrack, join_voice::JoinVoice, leave_voice::LeaveVoice,
 };
@@ -27,7 +27,7 @@ pub struct DiscordHandler {
     pub join_voice: Arc<JoinVoice>,
     pub leave_voice: Arc<LeaveVoice>,
     pub enqueue_track: Arc<EnqueueTrack>,
-    pub media_repo: Arc<dyn MediaRepository>,
+    pub search_port: Arc<dyn MediaSearchPort>,
     pub scanner: Arc<MediaScanner>,
 }
 
@@ -164,21 +164,38 @@ impl DiscordHandler {
         let asset_id = match uuid::Uuid::parse_str(asset_id_str) {
             Ok(id) => id,
             Err(_) => {
-                let _ = respond_error(ctx, command, "Invalid track selection.").await;
+                let _ = respond_error(ctx, command, "Invalid selection. Please pick a track from the autocomplete list.").await;
                 return;
             }
         };
+
+        // Verify user is in a voice channel
+        let in_voice = ctx.cache.guild(guild_id).and_then(|guild| {
+            guild
+                .voice_states
+                .get(&command.user.id)
+                .and_then(|vs| vs.channel_id)
+        });
+
+        if in_voice.is_none() {
+            let _ = respond_error(ctx, command, "You must be in a voice channel.").await;
+            return;
+        }
 
         let gid = DomainGuildId(guild_id.get());
         let user_id = command.user.id.get();
 
         match self.enqueue_track.execute_by_asset_id(asset_id, gid, user_id).await {
-            Ok(title) => {
-                let _ = respond_success(ctx, command, &format!("Enqueued `{title}`")).await;
+            Ok(result) => {
+                let msg = if let Some(ref artist) = result.artist {
+                    format!("▶ Queued: **{}** by **{}**", result.title, artist)
+                } else {
+                    format!("▶ Queued: **{}**", result.title)
+                };
+                let _ = respond_success(ctx, command, &msg).await;
             }
             Err(e) => {
-                let _ =
-                    respond_error(ctx, command, &format!("Failed to enqueue: {:?}", e)).await;
+                let _ = respond_error(ctx, command, &format!("Failed to enqueue: {e}")).await;
             }
         }
     }
@@ -216,8 +233,12 @@ impl DiscordHandler {
 
         match self.scanner.scan().await {
             Ok(report) => {
+                let msg = format!(
+                    "✅ Scan complete — {} new tracks indexed, {} already known, {} errors.",
+                    report.new, report.skipped, report.errors
+                );
                 let _ = command
-                    .edit_response(&ctx.http, EditInteractionResponse::new().content(format!("✅ {report}")))
+                    .edit_response(&ctx.http, EditInteractionResponse::new().content(msg))
                     .await;
             }
             Err(e) => {
@@ -241,8 +262,13 @@ impl DiscordHandler {
             .and_then(|o| o.value.as_str())
             .unwrap_or("");
 
-        let results = match self.media_repo.search(focused_value, 25).await {
-            Ok(r) => r,
+        info!(query = focused_value, "Autocomplete triggered");
+
+        let results = match self.search_port.search_assets(focused_value, 25).await {
+            Ok(r) => {
+                info!(query = focused_value, count = r.len(), "Autocomplete search results");
+                r
+            }
             Err(e) => {
                 warn!("Autocomplete search failed: {:?}", e);
                 Vec::new()
@@ -251,11 +277,11 @@ impl DiscordHandler {
 
         let choices: Vec<AutocompleteChoice<'_>> = results
             .iter()
-            .map(|asset| {
-                let display = if let Some(ref filename) = asset.original_filename {
-                    format!("{} ({})", asset.title, filename)
+            .map(|result| {
+                let display = if let Some(ref artist) = result.artist {
+                    format!("{} — {}", result.title, artist)
                 } else {
-                    asset.title.clone()
+                    result.title.clone()
                 };
                 // Truncate display name to 100 chars (Discord limit)
                 let display = if display.len() > 100 {
@@ -263,7 +289,7 @@ impl DiscordHandler {
                 } else {
                     display
                 };
-                AutocompleteChoice::new(display, asset.id.to_string())
+                AutocompleteChoice::new(display, result.asset_id.to_string())
             })
             .collect();
 

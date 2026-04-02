@@ -1,12 +1,18 @@
 CREATE TABLE media_assets (
     id UUID PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
+    artist TEXT,
     origin_type VARCHAR(50) NOT NULL,
     origin_rel_path VARCHAR(1024),
     origin_remote_url VARCHAR(2048),
     duration_ms BIGINT,
+    content_hash TEXT,
+    original_filename TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
+
+CREATE UNIQUE INDEX idx_media_assets_content_hash
+    ON media_assets(content_hash) WHERE content_hash IS NOT NULL;
 
 CREATE TABLE playlists (
     id UUID PRIMARY KEY,
@@ -16,11 +22,10 @@ CREATE TABLE playlists (
 );
 
 CREATE TABLE playlist_items (
-    id UUID,
+    id UUID PRIMARY KEY,
     playlist_id UUID NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
     asset_id UUID NOT NULL REFERENCES media_assets(id) ON DELETE CASCADE,
-    position INTEGER NOT NULL,
-    PRIMARY KEY (id)
+    position INTEGER NOT NULL
 );
 
 CREATE TABLE guild_settings (

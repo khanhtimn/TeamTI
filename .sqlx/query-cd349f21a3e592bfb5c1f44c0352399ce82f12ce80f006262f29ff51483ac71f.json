@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                title,\n                artist,\n                original_filename,\n                (\n                    CASE WHEN search_vector @@ websearch_to_tsquery('music_simple', $1)\n                         THEN ts_rank_cd(search_vector, websearch_to_tsquery('music_simple', $1))\n                         ELSE 0\n                    END\n                    + coalesce(word_similarity($1, search_text), 0)\n                )::float8 AS \"rank: f64\"\n            FROM media_assets\n            ORDER BY \"rank: f64\" DESC, title ASC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "artist",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "original_filename",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "rank: f64",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "cd349f21a3e592bfb5c1f44c0352399ce82f12ce80f006262f29ff51483ac71f"
+}

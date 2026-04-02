@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         join_voice,
         leave_voice,
         enqueue_track,
-        media_repo: media_repo.clone(),
+        search_port: media_repo.clone(),
         scanner: scanner.clone(),
     };
 

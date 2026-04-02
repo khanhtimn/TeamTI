@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, title, origin_type, origin_rel_path, origin_remote_url, duration_ms,\n                   content_hash, original_filename\n            FROM media_assets\n            WHERE title ILIKE $1 OR original_filename ILIKE $1\n            LIMIT $2\n            ",
+  "query": "\n            SELECT id, title, origin_type, origin_rel_path, origin_remote_url, duration_ms,\n                   content_hash, original_filename, artist\n            FROM media_assets WHERE content_hash = $1 LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -42,12 +42,16 @@
         "ordinal": 7,
         "name": "original_filename",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "artist",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Int8"
+        "Text"
       ]
     },
     "nullable": [
@@ -58,8 +62,9 @@
       true,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "866d289e55d1b2e8c6531a8b3360de37fbbd537e67346945e071bc567fa55981"
+  "hash": "6c69ed182644b27bf8d43226b8d39a56413de06f6fd5f95b8ae2f8593c3f98d6"
 }

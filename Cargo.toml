@@ -25,7 +25,7 @@ songbird = { git = "https://github.com/serenity-rs/songbird", branch = "serenity
     "serenity",
     "builtin-queue",
 ] }
-symphonia = { version = "0.5", features = ["mp3", "wav"] }
+symphonia = { version = "0.5", features = ["mp3", "aac", "isomp4", "alac", "ogg", "vorbis", "wav", "flac"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 
 # Persistence

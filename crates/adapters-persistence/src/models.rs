@@ -11,4 +11,5 @@ pub struct DbMediaAsset {
     pub duration_ms: Option<i64>,
     pub content_hash: Option<String>,
     pub original_filename: Option<String>,
+    pub artist: Option<String>,
 }

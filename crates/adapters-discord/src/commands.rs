@@ -1,5 +1,6 @@
 use serenity::builder::{CreateCommand, CreateCommandOption};
 use serenity::model::application::CommandOptionType;
+use serenity::model::Permissions;
 
 pub fn ping() -> CreateCommand<'static> {
     CreateCommand::new("ping").description("A ping command")
@@ -15,12 +16,12 @@ pub fn leave() -> CreateCommand<'static> {
 
 pub fn play() -> CreateCommand<'static> {
     CreateCommand::new("play")
-        .description("Play a track from the music catalog")
+        .description("Search and queue a track")
         .add_option(
             CreateCommandOption::new(
                 CommandOptionType::String,
                 "query",
-                "Track name to search",
+                "Track title to search",
             )
             .required(true)
             .set_autocomplete(true),
@@ -28,5 +29,7 @@ pub fn play() -> CreateCommand<'static> {
 }
 
 pub fn scan() -> CreateCommand<'static> {
-    CreateCommand::new("scan").description("Scan the media directory for new tracks (admin only)")
+    CreateCommand::new("scan")
+        .description("Scan and index local media files (admin only)")
+        .default_member_permissions(Permissions::ADMINISTRATOR)
 }

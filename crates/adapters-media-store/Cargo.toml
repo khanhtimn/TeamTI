@@ -15,3 +15,4 @@ tracing.workspace = true
 blake3 = "1"
 walkdir = "2"
 symphonia.workspace = true
+unicode-normalization = "0.1"

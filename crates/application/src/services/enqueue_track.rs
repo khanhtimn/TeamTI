@@ -7,6 +7,11 @@ use crate::ports::playback_gateway::PlaybackGateway;
 use crate::ports::media_repository::MediaRepository;
 use crate::ports::media_store::MediaStore;
 
+pub struct EnqueueTrackResult {
+    pub title: String,
+    pub artist: Option<String>,
+}
+
 pub struct EnqueueTrack {
     gateway: Arc<dyn PlaybackGateway>,
     media_repo: Arc<dyn MediaRepository>,
@@ -28,7 +33,7 @@ impl EnqueueTrack {
         asset_id: uuid::Uuid,
         guild_id: GuildId,
         user_id: u64,
-    ) -> Result<String, DomainError> {
+    ) -> Result<EnqueueTrackResult, DomainError> {
         let asset = self.media_repo.find_by_id(asset_id).await?.ok_or_else(|| {
             DomainError::NotFound(format!("No asset with id {asset_id}"))
         })?;
@@ -53,7 +58,10 @@ impl EnqueueTrack {
         };
 
         self.gateway.enqueue(req).await?;
-        Ok(asset.title)
+        Ok(EnqueueTrackResult {
+            title: asset.title,
+            artist: asset.artist,
+        })
     }
 
     pub async fn execute(&self, req: EnqueueRequest) -> Result<(), DomainError> {
