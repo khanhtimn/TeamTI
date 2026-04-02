@@ -1,5 +1,5 @@
-use domain::media::PlayableSource;
 use domain::error::DomainError;
+use domain::media::PlayableSource;
 use songbird::input::Input;
 
 pub async fn map_playable_to_songbird(source: PlayableSource) -> Result<Input, DomainError> {
@@ -8,8 +8,8 @@ pub async fn map_playable_to_songbird(source: PlayableSource) -> Result<Input, D
             let src = songbird::input::File::new(path);
             Ok(src.into())
         }
-        PlayableSource::UnresolvedRemote(_) => {
-            Err(DomainError::InvalidState("Remote sources not supported in v1".into()))
-        }
+        PlayableSource::UnresolvedRemote(_) => Err(DomainError::InvalidState(
+            "Remote sources not supported in v1".into(),
+        )),
     }
 }

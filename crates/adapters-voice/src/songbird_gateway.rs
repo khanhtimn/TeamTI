@@ -5,8 +5,8 @@ use domain::guild::GuildId;
 use domain::playback::{EnqueueRequest, QueueRequest, StartVoiceChannel};
 use serenity::model::id::ChannelId as SerenityChannelId;
 use serenity::model::id::GuildId as SerenityGuildId;
-use songbird::events::{CoreEvent, TrackEvent};
 use songbird::Songbird;
+use songbird::events::{CoreEvent, TrackEvent};
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
@@ -96,4 +96,3 @@ impl PlaybackGateway for SongbirdPlaybackGateway {
         }
     }
 }
-

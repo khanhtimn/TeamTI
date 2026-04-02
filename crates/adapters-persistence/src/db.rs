@@ -1,4 +1,4 @@
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -11,7 +11,7 @@ impl Database {
             .acquire_timeout(Duration::from_secs(3))
             .connect(url)
             .await?;
-        
+
         Ok(Self(pool))
     }
 }

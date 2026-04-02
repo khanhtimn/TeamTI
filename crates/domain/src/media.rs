@@ -25,6 +25,9 @@ pub struct ManagedBlobRef {
 
 #[derive(Debug, Clone)]
 pub enum PlayableSource {
-    ResolvedPlayable { path: String, duration_ms: Option<u64> },
+    ResolvedPlayable {
+        path: String,
+        duration_ms: Option<u64>,
+    },
     UnresolvedRemote(String),
 }

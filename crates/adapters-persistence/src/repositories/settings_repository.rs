@@ -1,8 +1,8 @@
-use async_trait::async_trait;
 use crate::db::Database;
+use application::ports::settings_repository::SettingsRepository;
+use async_trait::async_trait;
 use domain::error::DomainError;
 use domain::guild::GuildId;
-use application::ports::settings_repository::SettingsRepository;
 
 pub struct PgSettingsRepository {
     db: Database,

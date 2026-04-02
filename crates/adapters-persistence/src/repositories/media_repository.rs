@@ -1,11 +1,11 @@
-use async_trait::async_trait;
-use tracing::debug;
 use crate::db::Database;
 use crate::models::DbMediaAsset;
-use domain::error::DomainError;
-use domain::media::{MediaAsset, MediaOrigin};
 use application::ports::media_repository::MediaRepository;
 use application::ports::search::{MediaSearchPort, MediaSearchResult};
+use async_trait::async_trait;
+use domain::error::DomainError;
+use domain::media::{MediaAsset, MediaOrigin};
+use tracing::debug;
 
 pub struct PgMediaRepository {
     db: Database,
@@ -146,7 +146,11 @@ impl MediaSearchPort for PgMediaRepository {
             .await
             .map_err(|e| DomainError::InvalidState(e.to_string()))?;
 
-            debug!(query = query, results = rows.len(), "Media search completed (empty query, returning all)");
+            debug!(
+                query = query,
+                results = rows.len(),
+                "Media search completed (empty query, returning all)"
+            );
 
             return Ok(rows
                 .into_iter()
@@ -188,7 +192,11 @@ impl MediaSearchPort for PgMediaRepository {
         .await
         .map_err(|e| DomainError::InvalidState(e.to_string()))?;
 
-        debug!(query = query, results = rows.len(), "Media search completed");
+        debug!(
+            query = query,
+            results = rows.len(),
+            "Media search completed"
+        );
 
         Ok(rows
             .into_iter()
@@ -201,4 +209,3 @@ impl MediaSearchPort for PgMediaRepository {
             .collect())
     }
 }
-

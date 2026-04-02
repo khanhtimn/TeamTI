@@ -91,19 +91,29 @@ impl MediaScanner {
             }
         }
 
-        let report = ScanReport { total, new, skipped, errors };
+        let report = ScanReport {
+            total,
+            new,
+            skipped,
+            errors,
+        };
         info!(%report, "Media scan complete");
         Ok(report)
     }
 
     /// Process a single file. Returns `true` if a new asset was created, `false` if skipped.
     async fn process_file(&self, path: &Path) -> Result<bool, DomainError> {
-        let content_hash = compute_blake3_hash(path)
-            .await
-            .map_err(|e| DomainError::InvalidState(format!("Hash failed for {}: {e}", path.display())))?;
+        let content_hash = compute_blake3_hash(path).await.map_err(|e| {
+            DomainError::InvalidState(format!("Hash failed for {}: {e}", path.display()))
+        })?;
 
         // Dedup check
-        if self.repo.find_by_content_hash(&content_hash).await?.is_some() {
+        if self
+            .repo
+            .find_by_content_hash(&content_hash)
+            .await?
+            .is_some()
+        {
             return Ok(false);
         }
 

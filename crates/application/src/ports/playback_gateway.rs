@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use domain::playback::{EnqueueRequest, QueueRequest};
 use domain::error::DomainError;
 use domain::guild::GuildId;
+use domain::playback::{EnqueueRequest, QueueRequest};
 
 #[async_trait]
 pub trait PlaybackGateway: Send + Sync {

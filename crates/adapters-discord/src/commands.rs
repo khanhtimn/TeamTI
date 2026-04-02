@@ -1,6 +1,6 @@
 use serenity::builder::{CreateCommand, CreateCommandOption};
-use serenity::model::application::CommandOptionType;
 use serenity::model::Permissions;
+use serenity::model::application::CommandOptionType;
 
 pub fn ping() -> CreateCommand<'static> {
     CreateCommand::new("ping").description("A ping command")
@@ -18,13 +18,9 @@ pub fn play() -> CreateCommand<'static> {
     CreateCommand::new("play")
         .description("Search and queue a track")
         .add_option(
-            CreateCommandOption::new(
-                CommandOptionType::String,
-                "query",
-                "Track title to search",
-            )
-            .required(true)
-            .set_autocomplete(true),
+            CreateCommandOption::new(CommandOptionType::String, "query", "Track title to search")
+                .required(true)
+                .set_autocomplete(true),
         )
 }
 

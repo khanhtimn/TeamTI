@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use crate::ports::playback_gateway::PlaybackGateway;
 use domain::error::DomainError;
 use domain::guild::GuildId;
-use crate::ports::playback_gateway::PlaybackGateway;
+use std::sync::Arc;
 
 pub struct LeaveVoice {
     gateway: Arc<dyn PlaybackGateway>,

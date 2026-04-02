@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use domain::media::MediaAsset;
 use domain::error::DomainError;
+use domain::media::MediaAsset;
 
 #[async_trait]
 pub trait MediaRepository: Send + Sync {

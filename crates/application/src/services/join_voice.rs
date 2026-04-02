@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use crate::ports::playback_gateway::PlaybackGateway;
 use domain::error::DomainError;
 use domain::playback::QueueRequest;
-use crate::ports::playback_gateway::PlaybackGateway;
+use std::sync::Arc;
 
 pub struct JoinVoice {
     gateway: Arc<dyn PlaybackGateway>,

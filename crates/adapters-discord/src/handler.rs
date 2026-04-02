@@ -1,21 +1,21 @@
 use serenity::async_trait;
 use serenity::builder::{
-    CreateAutocompleteResponse, CreateInteractionResponse, CreateInteractionResponseMessage,
-    AutocompleteChoice, EditInteractionResponse,
+    AutocompleteChoice, CreateAutocompleteResponse, CreateInteractionResponse,
+    CreateInteractionResponseMessage, EditInteractionResponse,
 };
+use serenity::model::Permissions;
 use serenity::model::application::{CommandInteraction, Interaction};
 use serenity::model::event::FullEvent;
 use serenity::model::id::GuildId;
-use serenity::model::Permissions;
 use serenity::prelude::*;
 use std::sync::Arc;
 use tracing::{error, info, warn};
 
+use adapters_media_store::scanner::MediaScanner;
 use application::ports::search::MediaSearchPort;
 use application::services::{
     enqueue_track::EnqueueTrack, join_voice::JoinVoice, leave_voice::LeaveVoice,
 };
-use adapters_media_store::scanner::MediaScanner;
 use domain::guild::GuildId as DomainGuildId;
 use domain::playback::{QueueRequest, StartVoiceChannel};
 
@@ -48,17 +48,15 @@ impl EventHandler for DiscordHandler {
                     );
                 }
             }
-            FullEvent::InteractionCreate { interaction, .. } => {
-                match interaction {
-                    Interaction::Command(command) => {
-                        self.handle_command(ctx, command).await;
-                    }
-                    Interaction::Autocomplete(autocomplete) => {
-                        self.handle_autocomplete(ctx, autocomplete).await;
-                    }
-                    _ => {}
+            FullEvent::InteractionCreate { interaction, .. } => match interaction {
+                Interaction::Command(command) => {
+                    self.handle_command(ctx, command).await;
                 }
-            }
+                Interaction::Autocomplete(autocomplete) => {
+                    self.handle_autocomplete(ctx, autocomplete).await;
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -111,8 +109,7 @@ impl DiscordHandler {
                     voice_channel_id: StartVoiceChannel::Id(c_id.get()),
                 };
                 if let Err(e) = self.join_voice.execute(req).await {
-                    let _ =
-                        respond_error(ctx, command, &format!("Failed to join: {:?}", e)).await;
+                    let _ = respond_error(ctx, command, &format!("Failed to join: {:?}", e)).await;
                 } else {
                     let _ = respond_success(ctx, command, "Joined voice!").await;
                 }
@@ -164,7 +161,12 @@ impl DiscordHandler {
         let asset_id = match uuid::Uuid::parse_str(asset_id_str) {
             Ok(id) => id,
             Err(_) => {
-                let _ = respond_error(ctx, command, "Invalid selection. Please pick a track from the autocomplete list.").await;
+                let _ = respond_error(
+                    ctx,
+                    command,
+                    "Invalid selection. Please pick a track from the autocomplete list.",
+                )
+                .await;
                 return;
             }
         };
@@ -185,7 +187,11 @@ impl DiscordHandler {
         let gid = DomainGuildId(guild_id.get());
         let user_id = command.user.id.get();
 
-        match self.enqueue_track.execute_by_asset_id(asset_id, gid, user_id).await {
+        match self
+            .enqueue_track
+            .execute_by_asset_id(asset_id, gid, user_id)
+            .await
+        {
             Ok(result) => {
                 let msg = if let Some(ref artist) = result.artist {
                     format!("▶ Queued: **{}** by **{}**", result.title, artist)
@@ -223,9 +229,7 @@ impl DiscordHandler {
         }
 
         // Defer — scanning may take a while
-        let defer = CreateInteractionResponse::Defer(
-            CreateInteractionResponseMessage::new(),
-        );
+        let defer = CreateInteractionResponse::Defer(CreateInteractionResponseMessage::new());
         if let Err(e) = command.create_response(&ctx.http, defer).await {
             error!("Failed to defer /scan response: {:?}", e);
             return;
@@ -243,7 +247,10 @@ impl DiscordHandler {
             }
             Err(e) => {
                 let _ = command
-                    .edit_response(&ctx.http, EditInteractionResponse::new().content(format!("❌ Scan failed: {e}")))
+                    .edit_response(
+                        &ctx.http,
+                        EditInteractionResponse::new().content(format!("❌ Scan failed: {e}")),
+                    )
                     .await;
             }
         }
@@ -266,7 +273,11 @@ impl DiscordHandler {
 
         let results = match self.search_port.search_assets(focused_value, 25).await {
             Ok(r) => {
-                info!(query = focused_value, count = r.len(), "Autocomplete search results");
+                info!(
+                    query = focused_value,
+                    count = r.len(),
+                    "Autocomplete search results"
+                );
                 r
             }
             Err(e) => {

@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use domain::error::DomainError;
-use domain::media::{ManagedBlobRef, MediaOrigin};
-use domain::playback::EnqueueRequest;
-use domain::guild::GuildId;
-use crate::ports::playback_gateway::PlaybackGateway;
 use crate::ports::media_repository::MediaRepository;
 use crate::ports::media_store::MediaStore;
+use crate::ports::playback_gateway::PlaybackGateway;
+use domain::error::DomainError;
+use domain::guild::GuildId;
+use domain::media::{ManagedBlobRef, MediaOrigin};
+use domain::playback::EnqueueRequest;
+use std::sync::Arc;
 
 pub struct EnqueueTrackResult {
     pub title: String,
@@ -24,7 +24,11 @@ impl EnqueueTrack {
         media_repo: Arc<dyn MediaRepository>,
         media_store: Arc<dyn MediaStore>,
     ) -> Self {
-        Self { gateway, media_repo, media_store }
+        Self {
+            gateway,
+            media_repo,
+            media_store,
+        }
     }
 
     /// Look up an asset by ID, resolve its blob path, and enqueue for playback.
@@ -34,20 +38,24 @@ impl EnqueueTrack {
         guild_id: GuildId,
         user_id: u64,
     ) -> Result<EnqueueTrackResult, DomainError> {
-        let asset = self.media_repo.find_by_id(asset_id).await?.ok_or_else(|| {
-            DomainError::NotFound(format!("No asset with id {asset_id}"))
-        })?;
+        let asset = self
+            .media_repo
+            .find_by_id(asset_id)
+            .await?
+            .ok_or_else(|| DomainError::NotFound(format!("No asset with id {asset_id}")))?;
 
         let blob_path = match &asset.origin {
             MediaOrigin::LocalManaged { rel_path } => rel_path.clone(),
             MediaOrigin::Remote(url) => {
-                return Err(DomainError::InvalidState(
-                    format!("Remote playback not yet supported: {url}"),
-                ));
+                return Err(DomainError::InvalidState(format!(
+                    "Remote playback not yet supported: {url}"
+                )));
             }
         };
 
-        let blob_ref = ManagedBlobRef { absolute_path: blob_path };
+        let blob_ref = ManagedBlobRef {
+            absolute_path: blob_path,
+        };
         let source = self.media_store.resolve_playable(&blob_ref).await?;
 
         let req = EnqueueRequest {

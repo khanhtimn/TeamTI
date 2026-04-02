@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use domain::guild::GuildId;
 use domain::error::DomainError;
+use domain::guild::GuildId;
 
 #[async_trait]
 pub trait SettingsRepository: Send + Sync {

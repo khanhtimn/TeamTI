@@ -12,8 +12,8 @@ pub struct FsStore {
 impl FsStore {
     pub fn new(root: impl AsRef<Path>) -> Self {
         std::fs::create_dir_all(root.as_ref()).ok();
-        let canonical = std::fs::canonicalize(root.as_ref())
-            .unwrap_or_else(|_| root.as_ref().to_path_buf());
+        let canonical =
+            std::fs::canonicalize(root.as_ref()).unwrap_or_else(|_| root.as_ref().to_path_buf());
         Self { root: canonical }
     }
 }

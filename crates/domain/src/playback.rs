@@ -1,6 +1,6 @@
-use uuid::Uuid;
 use crate::guild::GuildId;
 use crate::media::PlayableSource;
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct EnqueueRequest {
