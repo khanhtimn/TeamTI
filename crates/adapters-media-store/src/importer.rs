@@ -1,25 +1,7 @@
 use std::path::Path;
-use tokio::io::AsyncReadExt;
 use tracing::warn;
 
 use crate::text::{normalize, normalize_filename, normalize_opt};
-
-/// Compute the BLAKE3 hash of a file, returning the hex-encoded digest.
-pub async fn compute_blake3_hash(path: &Path) -> Result<String, std::io::Error> {
-    let mut file = tokio::fs::File::open(path).await?;
-    let mut hasher = blake3::Hasher::new();
-    let mut buf = vec![0u8; 64 * 1024];
-
-    loop {
-        let n = file.read(&mut buf).await?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buf[..n]);
-    }
-
-    Ok(hasher.finalize().to_hex().to_string())
-}
 
 /// Extracted metadata from an audio file.
 pub struct AudioMetadata {
@@ -75,16 +57,11 @@ fn extract_duration_ms(
     }
 
     // Tier 2: format-level duration from container metadata
-    // Some MP4/M4A containers expose total duration separately from codec params
     if let Some(track_tb) = track.codec_params.time_base {
-        // Duration may be stored at the format level in some containers
-        // Symphonia exposes this via the track's time_base if n_frames is set
-        // at the container level but not the codec level — check both
         let _ = (track_tb, format); // format reserved for future container query
     }
 
     // Tier 3: cannot determine duration without full file scan
-    // Log at DEBUG, not WARN — this is expected for VBR MP3 without Xing header
     tracing::debug!(
         "Duration unavailable for track (VBR without Xing header or \
          unsupported container). duration_ms will be stored as None."

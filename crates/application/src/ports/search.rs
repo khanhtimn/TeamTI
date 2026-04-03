@@ -1,21 +1,15 @@
+use crate::AppError;
 use async_trait::async_trait;
-use domain::error::DomainError;
-use uuid::Uuid;
+use domain::track::TrackSummary;
 
 #[async_trait]
-pub trait MediaSearchPort: Send + Sync {
-    /// Search media assets by title/artist/filename.
-    /// Returns up to `limit` results ordered by relevance.
-    async fn search_assets(
-        &self,
-        query: &str,
-        limit: usize,
-    ) -> Result<Vec<MediaSearchResult>, DomainError>;
-}
+pub trait TrackSearchPort: Send + Sync {
+    /// Hybrid FTS + trigram search. Only returns tracks with
+    /// enrichment_status = 'done'.
+    async fn search(&self, query: &str, limit: usize) -> Result<Vec<TrackSummary>, AppError>;
 
-pub struct MediaSearchResult {
-    pub asset_id: Uuid,
-    pub title: String,
-    pub artist: Option<String>,
-    pub original_filename: Option<String>,
+    /// Autocomplete: prefix match on title and artist_display.
+    /// Only returns tracks with enrichment_status = 'done'.
+    async fn autocomplete(&self, prefix: &str, limit: usize)
+    -> Result<Vec<TrackSummary>, AppError>;
 }

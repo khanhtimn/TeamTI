@@ -2,6 +2,8 @@ use serenity::Client;
 use serenity::prelude::{GatewayIntents, Token};
 
 use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use adapters_discord::handler::DiscordHandler;
@@ -9,8 +11,11 @@ use adapters_media_store::fs_store::FsStore;
 use adapters_media_store::scanner::MediaScanner;
 use adapters_persistence::db::Database;
 use adapters_persistence::migrations::run_migrations;
-use adapters_persistence::repositories::media_repository::PgMediaRepository;
+use adapters_persistence::repositories::track_repository::PgTrackRepository;
 use adapters_voice::songbird_gateway::SongbirdPlaybackGateway;
+use application::EnrichmentOrchestrator;
+use application::events::AcoustIdRequest;
+use application::ports::repository::TrackRepository;
 use shared_config::Config;
 
 use application::services::{
@@ -26,25 +31,72 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = dotenvy::dotenv();
     shared_observability::setup();
     let config = Config::load();
+    let config = Arc::new(config);
 
     info!("Connecting to database...");
     let db = Database::connect(&config.database_url).await?;
     run_migrations(&db).await?;
 
     info!("Initializing storage and repositories...");
-    let media_repo: Arc<PgMediaRepository> = Arc::new(PgMediaRepository::new(db.clone()));
-    let media_store = Arc::new(FsStore::new(&config.media_root));
+    let track_repo: Arc<PgTrackRepository> = Arc::new(PgTrackRepository::new(db.clone()));
 
-    // Run the initial media scan
-    let scanner = Arc::new(MediaScanner::new(&config.media_root, media_repo.clone()));
-    info!("Running startup media scan...");
-    match scanner.scan().await {
-        Ok(report) => info!(%report, "Startup scan finished"),
-        Err(e) => error!("Startup scan failed: {:?}", e),
+    // Startup watchdog: reset stale 'enriching' rows to 'pending'
+    let reset_count = track_repo
+        .reset_stale_enriching()
+        .await
+        .expect("stale enriching watchdog failed");
+    if reset_count > 0 {
+        info!(
+            count = reset_count,
+            "Reset stale enriching tracks to pending"
+        );
     }
 
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_VOICE_STATES;
+    let media_store = Arc::new(FsStore::new(&config.media_root));
 
+    // ── Scan Pipeline ──────────────────────────────────────────────────
+    let token = CancellationToken::new();
+
+    // 1. Start scan pipeline — returns TrackScanned receiver and SMB semaphore
+    let (scan_rx, _smb_semaphore) =
+        MediaScanner::start(Arc::clone(&config), Arc::clone(&track_repo), token.clone());
+
+    // 2. AcoustID channel — no-op consumer until Pass 3
+    // Bounded channel: back-pressure intentional.
+    // If consumer is slow, Orchestrator blocks until space is available.
+    // Pass 3 replaces the no-op consumer with the real AcoustID adapter.
+    let (acoustid_tx, mut acoustid_rx) = mpsc::channel::<AcoustIdRequest>(64);
+    tokio::spawn(async move {
+        while let Some(req) = acoustid_rx.recv().await {
+            info!(
+                "pass2 stub: pending enrich for track_id={} fingerprint_len={}",
+                req.track_id,
+                req.fingerprint.len(),
+            );
+        }
+    });
+
+    // 3. Enrichment Orchestrator
+    let orchestrator = Arc::new(EnrichmentOrchestrator {
+        repo: Arc::clone(&track_repo) as Arc<dyn TrackRepository>,
+        scan_interval_secs: config.scan_interval_secs,
+        failed_retry_limit: config.failed_retry_limit,
+        unmatched_retry_limit: config.unmatched_retry_limit,
+    });
+    {
+        let tok = token.clone();
+        let o = Arc::clone(&orchestrator);
+        tokio::spawn(async move {
+            tokio::select! {
+                biased;
+                _ = tok.cancelled() => {}
+                _ = o.run(scan_rx, acoustid_tx) => {}
+            }
+        });
+    }
+
+    // ── Discord Bot ────────────────────────────────────────────────────
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::GUILD_VOICE_STATES;
     let songbird = songbird::Songbird::serenity();
 
     info!("Initializing Application Services...");
@@ -54,7 +106,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let leave_voice = Arc::new(LeaveVoice::new(playback_gateway.clone()));
     let enqueue_track = Arc::new(EnqueueTrack::new(
         playback_gateway.clone(),
-        media_repo.clone(),
+        track_repo.clone(),
         media_store.clone(),
     ));
 
@@ -64,13 +116,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         join_voice,
         leave_voice,
         enqueue_track,
-        search_port: media_repo.clone(),
-        scanner: scanner.clone(),
     };
 
-    let token: Token = config.discord_token.parse()?;
+    let token_str: Token = config.discord_token.parse()?;
 
-    let mut client = Client::builder(token, intents)
+    let mut client = Client::builder(token_str, intents)
         .event_handler(Arc::new(handler))
         .voice_manager(songbird)
         .await

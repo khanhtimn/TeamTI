@@ -7,12 +7,20 @@ authors.workspace = true
 [dependencies]
 domain = { path = "../domain" }
 application = { path = "../application" }
+shared-config = { path = "../shared-config" }
+adapters-persistence = { path = "../adapters-persistence" }
+adapters-watcher = { path = "../adapters-watcher" }
+
 tokio.workspace = true
+tracing.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 uuid.workspace = true
-tracing.workspace = true
-blake3 = "1"
-walkdir = "2"
+chrono.workspace = true
+bytes.workspace = true
 symphonia.workspace = true
+lofty = "0.23"
 unicode-normalization = "0.1"
+walkdir = "2"
+tokio-util = { version = "0.7", features = ["rt"] }
+chromaprint-next = "0.1.0"

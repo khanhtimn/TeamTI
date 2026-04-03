@@ -1,0 +1,77 @@
+use crate::AppError;
+use async_trait::async_trait;
+use std::path::Path;
+
+/// Raw tags read from a file before enrichment.
+#[derive(Debug, Clone)]
+pub struct RawFileTags {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub year: Option<i32>,
+    pub genre: Option<String>,
+    pub track_number: Option<u32>,
+    pub disc_number: Option<u32>,
+    pub duration_ms: Option<u32>,
+}
+
+/// Chromaprint fingerprint result.
+#[derive(Debug, Clone)]
+pub struct AudioFingerprint {
+    pub fingerprint: String, // base64-encoded Chromaprint string
+    pub duration_secs: u32,
+}
+
+/// Best match returned by AcoustID lookup.
+#[derive(Debug, Clone)]
+pub struct AcoustIdMatch {
+    pub recording_mbid: String,
+    pub score: f32,
+    pub acoustid_id: String,
+}
+
+/// Recording data returned by MusicBrainz.
+#[derive(Debug, Clone)]
+pub struct MbRecording {
+    pub title: String,
+    pub artist_credits: Vec<MbArtistCredit>,
+    pub release_mbid: String,
+    pub release_title: String,
+    pub release_year: Option<i32>,
+    pub genre: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MbArtistCredit {
+    pub artist_mbid: String,
+    pub name: String,
+    pub sort_name: String,
+    pub join_phrase: Option<String>, // " feat. ", " & ", etc.
+}
+
+#[async_trait]
+pub trait FingerprintPort: Send + Sync {
+    async fn compute(&self, path: &Path) -> Result<(AudioFingerprint, RawFileTags), AppError>;
+}
+
+#[async_trait]
+pub trait AcoustIdPort: Send + Sync {
+    async fn lookup(&self, fp: &AudioFingerprint) -> Result<Option<AcoustIdMatch>, AppError>;
+}
+
+#[async_trait]
+pub trait MusicBrainzPort: Send + Sync {
+    async fn fetch_recording(&self, mbid: &str) -> Result<MbRecording, AppError>;
+}
+
+#[async_trait]
+pub trait CoverArtPort: Send + Sync {
+    /// Returns raw image bytes if found, None otherwise.
+    async fn fetch_front(&self, release_mbid: &str) -> Result<Option<bytes::Bytes>, AppError>;
+
+    /// Extract embedded art from file tags. None if no embedded art.
+    async fn extract_from_tags(
+        &self,
+        path: &std::path::Path,
+    ) -> Result<Option<bytes::Bytes>, AppError>;
+}

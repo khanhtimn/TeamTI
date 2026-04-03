@@ -21,3 +21,4 @@ tracing.workspace = true
 dotenvy.workspace = true
 symphonia.workspace = true
 rustls.workspace = true
+tokio-util = { version = "0.7", features = ["rt"] }

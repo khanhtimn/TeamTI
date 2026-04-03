@@ -7,4 +7,6 @@ authors.workspace = true
 [dependencies]
 uuid.workspace = true
 chrono.workspace = true
+serde.workspace = true
+sqlx.workspace = true
 thiserror.workspace = true

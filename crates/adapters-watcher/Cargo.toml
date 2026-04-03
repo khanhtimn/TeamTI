@@ -1,0 +1,15 @@
+[package]
+name = "adapters-watcher"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+shared-config = { path = "../shared-config" }
+tokio = { workspace = true }
+notify = { version = "8", default-features = false, features = [
+    "macos_fsevent",
+] }
+notify-debouncer-full = "0.7"
+tracing.workspace = true
+thiserror.workspace = true

@@ -1,9 +1,5 @@
 use serenity::async_trait;
-use serenity::builder::{
-    AutocompleteChoice, CreateAutocompleteResponse, CreateInteractionResponse,
-    CreateInteractionResponseMessage, EditInteractionResponse,
-};
-use serenity::model::Permissions;
+use serenity::builder::{CreateAutocompleteResponse, CreateInteractionResponse};
 use serenity::model::application::{CommandInteraction, Interaction};
 use serenity::model::event::FullEvent;
 use serenity::model::id::GuildId;
@@ -11,8 +7,6 @@ use serenity::prelude::*;
 use std::sync::Arc;
 use tracing::{error, info, warn};
 
-use adapters_media_store::scanner::MediaScanner;
-use application::ports::search::MediaSearchPort;
 use application::services::{
     enqueue_track::EnqueueTrack, join_voice::JoinVoice, leave_voice::LeaveVoice,
 };
@@ -27,8 +21,6 @@ pub struct DiscordHandler {
     pub join_voice: Arc<JoinVoice>,
     pub leave_voice: Arc<LeaveVoice>,
     pub enqueue_track: Arc<EnqueueTrack>,
-    pub search_port: Arc<dyn MediaSearchPort>,
-    pub scanner: Arc<MediaScanner>,
 }
 
 #[async_trait]
@@ -207,53 +199,7 @@ impl DiscordHandler {
     }
 
     async fn handle_scan(&self, ctx: &Context, command: &CommandInteraction) {
-        let _guild_id = match command.guild_id {
-            Some(id) => id,
-            None => {
-                let _ = respond_error(ctx, command, "Must be used in a guild.").await;
-                return;
-            }
-        };
-
-        // Check ADMINISTRATOR permission
-        let has_admin = command
-            .member
-            .as_ref()
-            .and_then(|m| m.permissions)
-            .map(|p| p.contains(Permissions::ADMINISTRATOR))
-            .unwrap_or(false);
-
-        if !has_admin {
-            let _ = respond_error(ctx, command, "You must be an administrator to use /scan.").await;
-            return;
-        }
-
-        // Defer — scanning may take a while
-        let defer = CreateInteractionResponse::Defer(CreateInteractionResponseMessage::new());
-        if let Err(e) = command.create_response(&ctx.http, defer).await {
-            error!("Failed to defer /scan response: {:?}", e);
-            return;
-        }
-
-        match self.scanner.scan().await {
-            Ok(report) => {
-                let msg = format!(
-                    "✅ Scan complete — {} new tracks indexed, {} already known, {} errors.",
-                    report.new, report.skipped, report.errors
-                );
-                let _ = command
-                    .edit_response(&ctx.http, EditInteractionResponse::new().content(msg))
-                    .await;
-            }
-            Err(e) => {
-                let _ = command
-                    .edit_response(
-                        &ctx.http,
-                        EditInteractionResponse::new().content(format!("❌ Scan failed: {e}")),
-                    )
-                    .await;
-            }
-        }
+        let _ = respond_success(ctx, command, "This command is being updated for v2.").await;
     }
 
     async fn handle_autocomplete(&self, ctx: &Context, autocomplete: &CommandInteraction) {
@@ -261,51 +207,9 @@ impl DiscordHandler {
             return;
         }
 
-        let focused_value = autocomplete
-            .data
-            .options
-            .iter()
-            .find(|o| o.name == "query")
-            .and_then(|o| o.value.as_str())
-            .unwrap_or("");
-
-        info!(query = focused_value, "Autocomplete triggered");
-
-        let results = match self.search_port.search_assets(focused_value, 25).await {
-            Ok(r) => {
-                info!(
-                    query = focused_value,
-                    count = r.len(),
-                    "Autocomplete search results"
-                );
-                r
-            }
-            Err(e) => {
-                warn!("Autocomplete search failed: {:?}", e);
-                Vec::new()
-            }
-        };
-
-        let choices: Vec<AutocompleteChoice<'_>> = results
-            .iter()
-            .map(|result| {
-                let display = if let Some(ref artist) = result.artist {
-                    format!("{} — {}", result.title, artist)
-                } else {
-                    result.title.clone()
-                };
-                // Truncate display name to 100 chars (Discord limit)
-                let display = if display.len() > 100 {
-                    format!("{}…", &display[..99])
-                } else {
-                    display
-                };
-                AutocompleteChoice::new(display, result.asset_id.to_string())
-            })
-            .collect();
-
+        // v2 stub: return empty autocomplete results until TrackSearchPort is wired
         let response = CreateInteractionResponse::Autocomplete(
-            CreateAutocompleteResponse::new().set_choices(choices),
+            CreateAutocompleteResponse::new().set_choices(Vec::new()),
         );
 
         if let Err(e) = autocomplete.create_response(&ctx.http, response).await {

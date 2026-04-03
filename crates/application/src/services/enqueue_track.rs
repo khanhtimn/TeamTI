@@ -1,9 +1,8 @@
-use crate::ports::media_repository::MediaRepository;
 use crate::ports::media_store::MediaStore;
-use crate::ports::playback_gateway::PlaybackGateway;
+use crate::ports::repository::TrackRepository;
 use domain::error::DomainError;
 use domain::guild::GuildId;
-use domain::media::{ManagedBlobRef, MediaOrigin};
+use domain::media::ManagedBlobRef;
 use domain::playback::EnqueueRequest;
 use std::sync::Arc;
 
@@ -13,48 +12,40 @@ pub struct EnqueueTrackResult {
 }
 
 pub struct EnqueueTrack {
-    gateway: Arc<dyn PlaybackGateway>,
-    media_repo: Arc<dyn MediaRepository>,
+    gateway: Arc<dyn crate::ports::playback_gateway::PlaybackGateway>,
+    track_repo: Arc<dyn TrackRepository>,
     media_store: Arc<dyn MediaStore>,
 }
 
 impl EnqueueTrack {
     pub fn new(
-        gateway: Arc<dyn PlaybackGateway>,
-        media_repo: Arc<dyn MediaRepository>,
+        gateway: Arc<dyn crate::ports::playback_gateway::PlaybackGateway>,
+        track_repo: Arc<dyn TrackRepository>,
         media_store: Arc<dyn MediaStore>,
     ) -> Self {
         Self {
             gateway,
-            media_repo,
+            track_repo,
             media_store,
         }
     }
 
-    /// Look up an asset by ID, resolve its blob path, and enqueue for playback.
+    /// Look up a track by ID, resolve its blob path, and enqueue for playback.
     pub async fn execute_by_asset_id(
         &self,
         asset_id: uuid::Uuid,
         guild_id: GuildId,
         user_id: u64,
     ) -> Result<EnqueueTrackResult, DomainError> {
-        let asset = self
-            .media_repo
+        let track = self
+            .track_repo
             .find_by_id(asset_id)
-            .await?
-            .ok_or_else(|| DomainError::NotFound(format!("No asset with id {asset_id}")))?;
-
-        let blob_path = match &asset.origin {
-            MediaOrigin::LocalManaged { rel_path } => rel_path.clone(),
-            MediaOrigin::Remote(url) => {
-                return Err(DomainError::InvalidState(format!(
-                    "Remote playback not yet supported: {url}"
-                )));
-            }
-        };
+            .await
+            .map_err(|e| DomainError::InvalidState(e.to_string()))?
+            .ok_or_else(|| DomainError::NotFound(format!("No track with id {asset_id}")))?;
 
         let blob_ref = ManagedBlobRef {
-            absolute_path: blob_path,
+            absolute_path: track.blob_location.clone(),
         };
         let source = self.media_store.resolve_playable(&blob_ref).await?;
 
@@ -62,13 +53,13 @@ impl EnqueueTrack {
             guild_id,
             user_id,
             source,
-            asset_id: asset.id,
+            asset_id: track.id,
         };
 
         self.gateway.enqueue(req).await?;
         Ok(EnqueueTrackResult {
-            title: asset.title,
-            artist: asset.artist,
+            title: track.title,
+            artist: track.artist_display,
         })
     }
 

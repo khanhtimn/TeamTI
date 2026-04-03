@@ -1,144 +1,75 @@
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::sync::{Semaphore, mpsc};
+use tokio_util::sync::CancellationToken;
 
-use application::ports::media_repository::MediaRepository;
-use domain::error::DomainError;
-use domain::media::{MediaAsset, MediaOrigin};
-use tracing::{debug, error, info, trace};
-use walkdir::WalkDir;
+use adapters_persistence::repositories::track_repository::PgTrackRepository;
+use adapters_watcher::MediaWatcher;
+use application::events::TrackScanned;
+use shared_config::Config;
 
-use crate::importer::{compute_blake3_hash, extract_metadata};
+use crate::classifier::{ToFingerprint, run_classifier};
+use crate::fingerprint::run_fingerprint_worker;
 
-const SUPPORTED_EXTENSIONS: &[&str] = &["mp3", "flac", "ogg", "wav", "aac", "m4a", "opus"];
-
-#[derive(Debug, Clone)]
-pub struct ScanReport {
-    pub total: usize,
-    pub new: usize,
-    pub skipped: usize,
-    pub errors: usize,
-}
-
-impl std::fmt::Display for ScanReport {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Scanned {} files. {} new, {} skipped, {} errors.",
-            self.total, self.new, self.skipped, self.errors
-        )
-    }
-}
-
-pub struct MediaScanner {
-    media_root: PathBuf,
-    repo: Arc<dyn MediaRepository>,
-}
+pub struct MediaScanner;
 
 impl MediaScanner {
-    pub fn new(media_root: impl Into<PathBuf>, repo: Arc<dyn MediaRepository>) -> Self {
-        Self {
-            media_root: media_root.into(),
-            repo,
-        }
-    }
+    /// Start the scan pipeline.
+    ///
+    /// Returns:
+    /// - `mpsc::Receiver<TrackScanned>` — connect to EnrichmentOrchestrator
+    /// - `Arc<Semaphore>` — SMB_READ_SEMAPHORE, store in AppState for Pass 4
+    pub fn start(
+        config: Arc<Config>,
+        track_repo: Arc<PgTrackRepository>,
+        token: CancellationToken,
+    ) -> (mpsc::Receiver<TrackScanned>, Arc<Semaphore>) {
+        let smb_semaphore = Arc::new(Semaphore::new(config.smb_read_concurrency));
+        let fp_concurrency = Arc::new(Semaphore::new(config.fingerprint_concurrency));
 
-    pub async fn scan(&self) -> Result<ScanReport, DomainError> {
-        let root = &self.media_root;
-        if !root.exists() {
-            return Err(DomainError::NotFound(format!(
-                "Media root does not exist: {}",
-                root.display()
-            )));
-        }
+        let (_watcher, file_rx) =
+            MediaWatcher::start(Arc::clone(&config)).expect("MediaWatcher failed to start");
 
-        info!(path = %root.display(), "Starting media scan");
+        let (fp_tx, fp_rx) = mpsc::channel::<ToFingerprint>(256);
+        let (scan_tx, scan_rx) = mpsc::channel::<TrackScanned>(128);
 
-        let mut total = 0usize;
-        let mut new = 0usize;
-        let mut skipped = 0usize;
-        let mut errors = 0usize;
+        // Classifier task
+        spawn_with_cancel(token.clone(), {
+            let config = Arc::clone(&config);
+            let repo = Arc::clone(&track_repo);
+            async move { run_classifier(config, repo, file_rx, fp_tx).await }
+        });
 
-        // Collect paths synchronously (walkdir is not async)
-        let paths: Vec<PathBuf> = WalkDir::new(root)
-            .follow_links(false)
-            .into_iter()
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| entry.file_type().is_file())
-            .filter(|entry| {
-                entry
-                    .path()
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|ext| SUPPORTED_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
-                    .unwrap_or(false)
-            })
-            .map(|entry| entry.into_path())
-            .collect();
+        // Fingerprint Worker task
+        spawn_with_cancel(token.clone(), {
+            let config = Arc::clone(&config);
+            let repo = Arc::clone(&track_repo);
+            let smb = Arc::clone(&smb_semaphore);
+            let fpc = Arc::clone(&fp_concurrency);
+            async move { run_fingerprint_worker(config, repo, smb, fpc, fp_rx, scan_tx).await }
+        });
 
-        for path in paths {
-            total += 1;
-
-            match self.process_file(&path).await {
-                Ok(true) => new += 1,
-                Ok(false) => {
-                    trace!(file = %path.display(), "Already known, skipping");
-                    skipped += 1;
-                }
-                Err(e) => {
-                    error!(file = %path.display(), error = %e, "Failed to process file");
-                    errors += 1;
-                }
+        // Keep watcher handle alive until cancellation
+        tokio::spawn({
+            let tok = token;
+            async move {
+                let _keep = _watcher;
+                tok.cancelled().await;
             }
-        }
+        });
 
-        let report = ScanReport {
-            total,
-            new,
-            skipped,
-            errors,
-        };
-        info!(%report, "Media scan complete");
-        Ok(report)
+        (scan_rx, smb_semaphore)
     }
+}
 
-    /// Process a single file. Returns `true` if a new asset was created, `false` if skipped.
-    async fn process_file(&self, path: &Path) -> Result<bool, DomainError> {
-        let content_hash = compute_blake3_hash(path).await.map_err(|e| {
-            DomainError::InvalidState(format!("Hash failed for {}: {e}", path.display()))
-        })?;
-
-        // Dedup check
-        if self
-            .repo
-            .find_by_content_hash(&content_hash)
-            .await?
-            .is_some()
-        {
-            return Ok(false);
+fn spawn_with_cancel<F>(token: CancellationToken, fut: F)
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    tokio::spawn(async move {
+        tokio::select! {
+            biased;
+            _ = token.cancelled() => {}
+            _ = fut => {}
         }
-
-        // Extract metadata using symphonia + filename fallback
-        // All text fields are NFC-normalized by the importer
-        let metadata = extract_metadata(path);
-
-        let abs_path = std::fs::canonicalize(path)
-            .unwrap_or_else(|_| path.to_path_buf())
-            .to_string_lossy()
-            .to_string();
-
-        let asset = MediaAsset {
-            id: uuid::Uuid::new_v4(),
-            title: metadata.title,
-            artist: metadata.artist,
-            origin: MediaOrigin::LocalManaged { rel_path: abs_path },
-            duration_ms: metadata.duration_ms,
-            content_hash: Some(content_hash),
-            original_filename: Some(metadata.original_filename),
-            search_text: None, // generated by DB
-        };
-
-        debug!(id = %asset.id, title = %asset.title, artist = ?asset.artist, "Registering new media asset");
-        self.repo.save(&asset).await?;
-        Ok(true)
-    }
+    });
 }

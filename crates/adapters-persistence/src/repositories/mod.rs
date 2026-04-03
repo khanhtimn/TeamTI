@@ -1,4 +1,3 @@
-pub mod media_repository;
-pub mod playlist_repository;
-pub mod queue_history_repository;
-pub mod settings_repository;
+pub mod album_repository;
+pub mod artist_repository;
+pub mod track_repository;

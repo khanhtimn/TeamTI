@@ -7,7 +7,6 @@ authors.workspace = true
 [dependencies]
 domain = { path = "../domain" }
 application = { path = "../application" }
-adapters-media-store = { path = "../adapters-media-store" }
 
 serenity.workspace = true
 tokio.workspace = true
