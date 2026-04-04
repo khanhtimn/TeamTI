@@ -5,12 +5,13 @@ use symphonia::default::get_probe;
 
 #[test]
 fn test_symphonia_meta() {
-    let path =
-        "/Users/khanhtimn/Documents/project/teamti/data/Don Toliver/OCTANE/4 - Secondhand.flac";
-    let src = File::open(path).expect("open");
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let path = std::path::Path::new(manifest_dir).join("tests/fixtures/dummy.wav");
+
+    let src = File::open(&path).expect("open");
     let mss = MediaSourceStream::new(Box::new(src), Default::default());
     let mut hint = Hint::new();
-    hint.with_extension("flac");
+    hint.with_extension("wav");
     let probed = get_probe()
         .format(&hint, mss, &Default::default(), &Default::default())
         .unwrap();
