@@ -1,0 +1,22 @@
+[package]
+name = "adapters-lyrics"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+# Traits & Domain
+application = { path = "../application" }
+
+# Error Handling & Async
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util"] }
+governor = { workspace = true }
+nonzero_ext.workspace = true
+tracing = { workspace = true }
+
+# Web / API
+reqwest = { workspace = true, features = ["json", "rustls"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }

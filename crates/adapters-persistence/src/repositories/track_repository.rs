@@ -551,6 +551,23 @@ impl TrackRepository for PgTrackRepository {
 
         Ok(tracks)
     }
+
+    async fn update_lyrics(&self, track_id: Uuid, lyrics: &str) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            UPDATE tracks
+            SET lyrics = $1, updated_at = NOW()
+            WHERE id = $2
+            "#,
+            lyrics,
+            track_id
+        )
+        .execute(&self.db.0)
+        .await
+        .map_err(crate::db_err!("track.update_lyrics"))?;
+
+        Ok(())
+    }
 }
 
 use application::ports::search::TrackSearchPort;
@@ -558,18 +575,34 @@ use domain::track::TrackSummary;
 
 #[async_trait]
 impl TrackSearchPort for PgTrackRepository {
-    async fn search(&self, query: &str, limit: usize) -> Result<Vec<TrackSummary>, AppError> {
-        let normalized = query.to_lowercase();
+    async fn search(&self, query: &str, limit: i64) -> Result<Vec<TrackSummary>, AppError> {
+        let normalized = query.trim().to_lowercase();
+
+        if normalized.is_empty() {
+            let rows = sqlx::query_as!(
+                TrackSummary,
+                r#"
+                SELECT id, title, artist_display, album_id, duration_ms, blob_location
+                FROM tracks
+                ORDER BY created_at DESC
+                LIMIT $1
+                "#,
+                limit
+            )
+            .fetch_all(&self.db.0)
+            .await
+            .map_err(crate::db_err!("track.search_empty"))?;
+            return Ok(rows);
+        }
+
         let rows = sqlx::query_as!(
             TrackSummary,
             r#"
             SELECT id, title, artist_display, album_id, duration_ms, blob_location
             FROM tracks
-            WHERE enrichment_status = 'done'
-              AND (
+            WHERE
                 search_vector @@ websearch_to_tsquery('music_simple', $1)
                 OR search_text ILIKE '%' || $2 || '%'
-              )
             ORDER BY
                 ts_rank(search_vector, websearch_to_tsquery('music_simple', $1)) DESC,
                 similarity(search_text, $2) DESC
@@ -585,24 +618,19 @@ impl TrackSearchPort for PgTrackRepository {
         Ok(rows)
     }
 
-    async fn autocomplete(
-        &self,
-        prefix: &str,
-        limit: usize,
-    ) -> Result<Vec<TrackSummary>, AppError> {
+    async fn autocomplete(&self, prefix: &str, limit: i64) -> Result<Vec<TrackSummary>, AppError> {
         let pattern = format!("{}%", prefix.to_lowercase());
         let rows = sqlx::query_as!(
             TrackSummary,
             r#"
             SELECT id, title, artist_display, album_id, duration_ms, blob_location
             FROM tracks
-            WHERE enrichment_status = 'done'
-              AND search_text LIKE $1
+            WHERE search_text LIKE $1
             ORDER BY title ASC
             LIMIT $2
             "#,
             pattern,
-            limit as i64
+            limit
         )
         .fetch_all(&self.db.0)
         .await

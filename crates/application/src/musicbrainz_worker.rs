@@ -3,7 +3,7 @@ use tokio::sync::mpsc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::events::{ToCoverArt, ToMusicBrainz};
+use crate::events::{ToLyrics, ToMusicBrainz};
 use crate::ports::{AlbumRepository, ArtistRepository, MusicBrainzPort, TrackRepository};
 use domain::{Album, AlbumArtist, Artist, ArtistRole, EnrichmentStatus, TrackArtist};
 
@@ -20,7 +20,7 @@ impl MusicBrainzWorker {
     pub async fn run(
         self: Arc<Self>,
         mut rx: mpsc::Receiver<ToMusicBrainz>,
-        cover_tx: mpsc::Sender<ToCoverArt>,
+        lyrics_tx: mpsc::Sender<ToLyrics>,
     ) {
         while let Some(msg) = rx.recv().await {
             // Rate limiting enforced inside the port.
@@ -33,7 +33,6 @@ impl MusicBrainzWorker {
                         error = %e,
                         "musicbrainz: fetch failed"
                     );
-                    // DESIGN-3 fix: use carried enrichment_attempts — no DB re-fetch.
                     let attempts = msg.enrichment_attempts + 1;
                     let status = if attempts >= self.failed_retry_limit {
                         EnrichmentStatus::Exhausted
@@ -49,6 +48,30 @@ impl MusicBrainzWorker {
                             Some(chrono::Utc::now()),
                         )
                         .await;
+
+                    // B3 fix: Fallback metadata pipe to allow lyrics/cover logic natively
+                    if let Ok(Some(track)) = self.track_repo.find_by_id(msg.track_id).await {
+                        let album_dir = std::path::Path::new(&msg.blob_location)
+                            .parent()
+                            .filter(|p| *p != std::path::Path::new(""))
+                            .map(|p| p.to_string_lossy().into_owned());
+
+                        let _ = lyrics_tx
+                            .send(ToLyrics {
+                                track_id: msg.track_id,
+                                release_mbid: String::new(),
+                                album_dir,
+                                blob_location: msg.blob_location.clone(),
+                                enrichment_attempts: attempts,
+                                correlation_id: msg.correlation_id,
+                                track_name: track.title,
+                                artist_name: track.artist_display.unwrap_or_default(),
+                                album_name: None,
+                                duration_secs: msg.duration_secs,
+                            })
+                            .await;
+                    }
+
                     continue;
                 }
             };
@@ -261,15 +284,18 @@ impl MusicBrainzWorker {
                 .filter(|p| *p != std::path::Path::new(""))
                 .map(|p| p.to_string_lossy().into_owned());
 
-            let _ = cover_tx
-                .send(ToCoverArt {
+            let _ = lyrics_tx
+                .send(ToLyrics {
                     track_id: msg.track_id,
-                    album_id: Some(upserted_album.id),
                     release_mbid: recording.release_mbid,
                     album_dir,
                     blob_location: msg.blob_location,
                     enrichment_attempts: msg.enrichment_attempts, // DESIGN-3 carry-through
                     correlation_id: msg.correlation_id,
+                    track_name: recording.title,
+                    artist_name: primary_artist_display,
+                    album_name: Some(recording.release_title),
+                    duration_secs: msg.duration_secs,
                 })
                 .await;
         }

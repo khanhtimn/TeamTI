@@ -6,10 +6,9 @@ use domain::track::TrackSummary;
 pub trait TrackSearchPort: Send + Sync {
     /// Hybrid FTS + trigram search. Only returns tracks with
     /// `enrichment_status` = 'done'.
-    async fn search(&self, query: &str, limit: usize) -> Result<Vec<TrackSummary>, AppError>;
+    async fn search(&self, query: &str, limit: i64) -> Result<Vec<TrackSummary>, AppError>;
 
     /// Autocomplete: prefix match on `title` and `artist_display`.
     /// Only returns tracks with `enrichment_status` = 'done'.
-    async fn autocomplete(&self, prefix: &str, limit: usize)
-    -> Result<Vec<TrackSummary>, AppError>;
+    async fn autocomplete(&self, prefix: &str, limit: i64) -> Result<Vec<TrackSummary>, AppError>;
 }

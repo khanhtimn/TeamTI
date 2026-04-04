@@ -9,6 +9,7 @@ use tracing::info;
 use adapters_acoustid::AcoustIdAdapter;
 use adapters_cover_art::CoverArtAdapter;
 use adapters_discord::handler::DiscordEventHandler;
+use adapters_lyrics::LyricsAdapter;
 use adapters_media_store::fs_store::FsStore;
 use adapters_media_store::scanner::MediaScanner;
 use adapters_media_store::tag_writer_port::FileTagWriterAdapter;
@@ -19,11 +20,12 @@ use adapters_persistence::repositories::album_repository::PgAlbumRepository;
 use adapters_persistence::repositories::artist_repository::PgArtistRepository;
 use adapters_persistence::repositories::track_repository::PgTrackRepository;
 use adapters_voice::state_map::GuildStateMap;
-use application::events::{ToCoverArt, ToMusicBrainz, ToTagWriter};
+use application::events::{ToCoverArt, ToLyrics, ToMusicBrainz, ToTagWriter};
 use application::ports::repository::{AlbumRepository, ArtistRepository, TrackRepository};
 use application::tag_writer_worker::run_startup_tag_poller;
 use application::{
-    AcoustIdWorker, CoverArtWorker, EnrichmentOrchestrator, MusicBrainzWorker, TagWriterWorker,
+    AcoustIdWorker, CoverArtWorker, EnrichmentOrchestrator, LyricsWorker, MusicBrainzWorker,
+    TagWriterWorker,
 };
 use shared_config::Config;
 
@@ -51,7 +53,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let album_repo: Arc<PgAlbumRepository> = Arc::new(PgAlbumRepository::new(db.clone()));
 
     let acoustid_adapter = Arc::new(AcoustIdAdapter::new(config.acoustid_api_key.clone()));
-    let mb_adapter = Arc::new(MusicBrainzAdapter::new(config.mb_user_agent.clone()));
+    let mb_adapter = Arc::new(MusicBrainzAdapter::new(config.user_agent.clone()));
+    let lyrics_adapter = Arc::new(LyricsAdapter::new(
+        config.media_root.clone(),
+        config.user_agent.clone(),
+    ));
     let cover_art_adapter = Arc::new(CoverArtAdapter::new(config.cover_art_concurrency));
     let reset_count = track_repo
         .reset_stale_enriching()
@@ -78,6 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (acoustid_tx, acoustid_rx) = mpsc::channel(64);
     let (mb_tx, mb_rx) = mpsc::channel::<ToMusicBrainz>(64);
+    let (lyrics_tx, lyrics_rx) = mpsc::channel::<ToLyrics>(64);
     let (cover_tx, cover_rx) = mpsc::channel::<ToCoverArt>(64);
     let (tag_writer_tx, tag_writer_rx) = mpsc::channel::<ToTagWriter>(128);
 
@@ -113,7 +120,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::select! {
                 biased;
                 _ = tok.cancelled() => {}
-                _ = worker.run(mb_rx, cover_tx) => {}
+                _ = worker.run(mb_rx, lyrics_tx) => {}
+            }
+        });
+    }
+
+    {
+        let worker = Arc::new(LyricsWorker {
+            port: lyrics_adapter,
+            track_repo: Arc::clone(&track_repo) as Arc<dyn TrackRepository>,
+        });
+        let tok = token.clone();
+        tokio::spawn(async move {
+            tokio::select! {
+                biased;
+                _ = tok.cancelled() => {}
+                _ = worker.run(lyrics_rx, cover_tx) => {}
             }
         });
     }

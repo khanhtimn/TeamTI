@@ -48,6 +48,23 @@ pub struct ToMusicBrainz {
 }
 
 /// Emitted by MusicBrainz Worker after metadata is written to DB.
+/// Consumed by Lyrics Worker.
+#[derive(Debug, Clone)]
+pub struct ToLyrics {
+    pub track_id: Uuid,
+    pub release_mbid: String,
+    pub album_dir: Option<String>,
+    pub blob_location: String,
+    pub enrichment_attempts: i32,
+    pub correlation_id: Uuid,
+    // Fields specific to LRCLIB usage
+    pub track_name: String,
+    pub artist_name: String,
+    pub album_name: Option<String>,
+    pub duration_secs: u32,
+}
+
+/// Emitted by Lyrics Worker after lyrics lookup.
 /// Consumed by Cover Art Worker.
 #[derive(Debug, Clone)]
 pub struct ToCoverArt {

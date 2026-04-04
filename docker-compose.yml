@@ -31,7 +31,7 @@ services:
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
       MEDIA_ROOT: /app/media_data
       ACOUSTID_API_KEY: ${ACOUSTID_API_KEY}
-      MB_USER_AGENT: ${MB_USER_AGENT:-TeamTI/0.1.0 (teamti@localhost)}
+      USER_AGENT: ${USER_AGENT:-TeamTI/0.1.0 (teamti@localhost)}
       MB_FETCH_WORK_CREDITS: ${MB_FETCH_WORK_CREDITS:-true}
       SCAN_INTERVAL_SECS: ${SCAN_INTERVAL_SECS:-300}
       SMB_READ_CONCURRENCY: ${SMB_READ_CONCURRENCY:-3}

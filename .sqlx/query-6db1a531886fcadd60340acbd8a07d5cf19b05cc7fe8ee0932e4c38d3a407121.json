@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, title, artist_display, album_id, duration_ms, blob_location\n            FROM tracks\n            WHERE enrichment_status = 'done'\n              AND search_text LIKE $1\n            ORDER BY title ASC\n            LIMIT $2\n            ",
+  "query": "\n                SELECT id, title, artist_display, album_id, duration_ms, blob_location\n                FROM tracks\n                ORDER BY created_at DESC\n                LIMIT $1\n                ",
   "describe": {
     "columns": [
       {
@@ -36,7 +36,6 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
         "Int8"
       ]
     },
@@ -49,5 +48,5 @@
       false
     ]
   },
-  "hash": "d9e4f9e71938fe0d1a1b39ccd549f31f68a5c2fa41059cbcbd0fd62d0d9290f5"
+  "hash": "6db1a531886fcadd60340acbd8a07d5cf19b05cc7fe8ee0932e4c38d3a407121"
 }

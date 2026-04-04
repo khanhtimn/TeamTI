@@ -96,6 +96,9 @@ pub trait TrackRepository: Send + Sync {
     /// Startup poller query: find tracks that are 'done' but haven't had
     /// their file tags written yet.
     async fn find_tags_unwritten(&self, limit: i64) -> Result<Vec<Track>, AppError>;
+
+    /// Update lyrics for a track.
+    async fn update_lyrics(&self, track_id: Uuid, lyrics: &str) -> Result<(), AppError>;
 }
 
 #[async_trait]

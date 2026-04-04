@@ -102,3 +102,16 @@ pub trait CoverArtPort: Send + Sync {
         path: &std::path::Path,
     ) -> Result<Option<bytes::Bytes>, AppError>;
 }
+
+#[async_trait]
+pub trait LyricsProviderPort: Send + Sync {
+    /// Search for a localized sidecar .lrc file or query LRCLIB utilizing the track metadata.
+    async fn fetch_lyrics(
+        &self,
+        blob_location: &str,
+        track_name: &str,
+        artist_name: &str,
+        album_name: Option<&str>,
+        duration_secs: u32,
+    ) -> Result<Option<String>, AppError>;
+}

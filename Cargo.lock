@@ -50,6 +50,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "adapters-lyrics"
+version = "0.1.0"
+dependencies = [
+ "application",
+ "async-trait",
+ "governor",
+ "nonzero_ext",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "adapters-media-store"
 version = "0.1.0"
 dependencies = [
@@ -372,6 +388,7 @@ dependencies = [
  "adapters-acoustid",
  "adapters-cover-art",
  "adapters-discord",
+ "adapters-lyrics",
  "adapters-media-store",
  "adapters-musicbrainz",
  "adapters-persistence",

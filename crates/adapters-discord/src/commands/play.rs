@@ -52,18 +52,6 @@ pub async fn autocomplete(
         }
     }
 
-    if query.trim().len() < 2 {
-        let _ = interaction
-            .create_response(
-                http,
-                serenity::builder::CreateInteractionResponse::Autocomplete(
-                    CreateAutocompleteResponse::new(),
-                ),
-            )
-            .await;
-        return;
-    }
-
     match track_repo.search(query, 25).await {
         Ok(results) => {
             let choices: Vec<_> = results

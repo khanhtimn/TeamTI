@@ -47,7 +47,7 @@ pub struct Config {
 
     /// MusicBrainz User-Agent header.
     /// Required format: "AppName/Version (contact@email.com)"
-    pub mb_user_agent: String,
+    pub user_agent: String,
 
     /// PollWatcher poll interval in seconds. Default: 300.
     pub scan_interval_secs: u64,
@@ -105,8 +105,9 @@ impl Config {
             media_root: std::env::var("MEDIA_ROOT")
                 .map_or_else(|_| PathBuf::from("./media_data"), PathBuf::from),
             acoustid_api_key: std::env::var("ACOUSTID_API_KEY").unwrap_or_default(),
-            mb_user_agent: std::env::var("MB_USER_AGENT")
-                .unwrap_or_else(|_| "TeamTI/0.1.0 (teamti@localhost)".to_string()),
+            user_agent: std::env::var("USER_AGENT")
+                .or_else(|_| std::env::var("MB_USER_AGENT")) // Fallback for transition
+                .unwrap_or_else(|_| "TeamTI/0.1.0 (local)".to_string()),
             scan_interval_secs: parse_env("SCAN_INTERVAL_SECS", 300)?,
             smb_read_concurrency: parse_env("SMB_READ_CONCURRENCY", 3)?,
             fingerprint_concurrency: parse_env("FINGERPRINT_CONCURRENCY", 4)?,
@@ -123,10 +124,13 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
-        if !self.mb_user_agent.contains('/') || !self.mb_user_agent.contains('(') {
+        if !self.user_agent.contains('/') || !self.user_agent.contains('(') {
             return Err(ConfigError::parse(
-                "MB_USER_AGENT",
-                "Must follow format 'AppName/Version (Contact)'",
+                "USER_AGENT",
+                format!(
+                    "USER_AGENT must be in format 'AppName/version (contact-url)'. Current: {}",
+                    self.user_agent
+                ),
             ));
         }
         Ok(())

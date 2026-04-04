@@ -175,6 +175,12 @@ pub enum AppError {
         detail: String,
     },
 
+    #[error("LRCLIB: {kind} — {detail}")]
+    LrcLib {
+        kind: LrcLibErrorKind,
+        detail: String,
+    },
+
     // ── Pipeline ─────────────────────────────────────────────────────────
     #[error("fingerprint failed for {path:?}: {source}")]
     Fingerprint {
@@ -258,6 +264,20 @@ pub enum CoverArtErrorKind {
 }
 
 #[derive(Debug, thiserror::Error, Clone, Copy, PartialEq, Eq)]
+pub enum LrcLibErrorKind {
+    #[error("not found")]
+    NotFound,
+    #[error("HTTP error")]
+    HttpError,
+    #[error("rate limited")]
+    RateLimited,
+    #[error("invalid response")]
+    InvalidResponse,
+    #[error("service unavailable")]
+    ServiceUnavailable,
+}
+
+#[derive(Debug, thiserror::Error, Clone, Copy, PartialEq, Eq)]
 pub enum TagWriteErrorKind {
     #[error("no writable tag format found")]
     NoTagFormat,
@@ -309,6 +329,13 @@ impl AppError {
                 CoverArtErrorKind::HttpError => "cover_art.http_error",
                 CoverArtErrorKind::ServiceUnavailable => "cover_art.unavailable",
             },
+            AppError::LrcLib { kind, .. } => match kind {
+                LrcLibErrorKind::NotFound => "lrclib.not_found",
+                LrcLibErrorKind::HttpError => "lrclib.http_error",
+                LrcLibErrorKind::RateLimited => "lrclib.rate_limited",
+                LrcLibErrorKind::InvalidResponse => "lrclib.invalid_response",
+                LrcLibErrorKind::ServiceUnavailable => "lrclib.unavailable",
+            },
             AppError::Fingerprint { .. } => "fingerprint",
             AppError::TagRead { .. } => "tag_read",
             AppError::TagWrite { .. } => "tag_write",
@@ -350,6 +377,13 @@ impl Retryable for AppError {
             AppError::CoverArt { kind, .. } => {
                 matches!(kind, CoverArtErrorKind::ServiceUnavailable)
             }
+
+            AppError::LrcLib { kind, .. } => matches!(
+                kind,
+                LrcLibErrorKind::RateLimited
+                    | LrcLibErrorKind::HttpError
+                    | LrcLibErrorKind::ServiceUnavailable
+            ),
 
             // Domain errors — not retryable
             AppError::TrackNotFound { .. }
