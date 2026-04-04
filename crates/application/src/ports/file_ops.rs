@@ -1,34 +1,43 @@
 use crate::AppError;
 use async_trait::async_trait;
-use std::path::Path;
 
-/// Enriched metadata to write back into file tags.
+/// Metadata to write back into file tags.
+/// All fields are Clone + Send — safe to move into spawn_blocking.
 #[derive(Debug, Clone)]
-pub struct EnrichedTags {
+pub struct TagData {
     pub title: String,
-    pub artist_display: String,
-    pub album: Option<String>,
+    pub artist: String,
+    pub album_title: Option<String>,
     pub year: Option<i32>,
-    pub genre: Option<String>,
-    pub track_number: Option<u32>,
-    pub disc_number: Option<u32>,
-    pub cover_art: Option<bytes::Bytes>,
+    pub genres: Vec<String>,
+    pub track_number: Option<i32>,
+    pub disc_number: Option<i32>,
+    // Extended metadata
+    pub bpm: Option<i32>,
+    pub isrc: Option<String>,
+    pub composer: Option<String>,
+    pub lyricist: Option<String>,
+    pub lyrics: Option<String>,
 }
 
 /// Result after writing tags back to file.
 #[derive(Debug, Clone)]
-pub struct TagWriteResult {
-    pub new_file_modified_at: chrono::DateTime<chrono::Utc>,
-    pub new_file_size_bytes: i64,
+pub struct WriteResult {
+    pub new_mtime: chrono::DateTime<chrono::Utc>,
+    pub new_size_bytes: i64,
 }
 
+/// A1 fix: The port owns SMB semaphore acquisition and `spawn_blocking`
+/// internally. The worker never acquires the semaphore — it delegates to
+/// the port entirely, preventing double-permit acquisition.
 #[async_trait]
 pub trait FileTagWriterPort: Send + Sync {
-    /// Write enriched tags to the file at `absolute_path` atomically
-    /// (tempfile + rename). Returns new mtime and size after write.
+    /// Write enriched tags to the file atomically (copy → modify → rename).
+    /// `blob_location` is relative to `MEDIA_ROOT`; the port joins with its
+    /// root to get the absolute path.
     async fn write_tags(
         &self,
-        absolute_path: &Path,
-        tags: &EnrichedTags,
-    ) -> Result<TagWriteResult, AppError>;
+        blob_location: &str,
+        tags: &TagData,
+    ) -> Result<WriteResult, AppError>;
 }

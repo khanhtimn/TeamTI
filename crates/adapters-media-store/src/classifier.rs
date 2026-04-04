@@ -6,7 +6,6 @@ use std::time::SystemTime;
 use tokio::sync::mpsc;
 use tracing::{debug, warn};
 
-use adapters_persistence::repositories::track_repository::PgTrackRepository;
 use adapters_watcher::{FileEvent, FileEventKind};
 use application::ports::repository::TrackRepository;
 use shared_config::Config;
@@ -19,6 +18,7 @@ pub struct ToFingerprint {
     pub mtime: SystemTime,
     pub size_bytes: u64,
     pub existing_id: Option<uuid::Uuid>,
+    pub correlation_id: uuid::Uuid,
 }
 
 /// Supported audio extensions. Lowercase only — compare after to_lowercase().
@@ -26,7 +26,7 @@ pub static SUPPORTED_EXTENSIONS: &[&str] = &["mp3", "flac", "ogg", "wav", "aac",
 
 pub async fn run_classifier(
     config: Arc<Config>,
-    track_repo: Arc<PgTrackRepository>,
+    track_repo: Arc<dyn TrackRepository>,
     mut file_rx: mpsc::Receiver<FileEvent>,
     fp_tx: mpsc::Sender<ToFingerprint>,
 ) {
@@ -70,14 +70,16 @@ pub async fn run_classifier(
             })
             .collect();
 
-        let stat_results: Vec<(&FileEvent, SystemTime, u64)> = supported_creates
-            .iter()
-            .filter_map(|e| {
-                let meta = std::fs::metadata(&e.path).ok()?;
-                let mtime = meta.modified().ok()?;
-                Some((*e, mtime, meta.len()))
-            })
-            .collect();
+        // PERF-1: Use async stat to avoid blocking the tokio worker thread
+        // on slow SMB/NFS mounts (stat can take 50-200ms per file).
+        let mut stat_results: Vec<(&FileEvent, SystemTime, u64)> = Vec::new();
+        for e in &supported_creates {
+            if let Ok(meta) = tokio::fs::metadata(&e.path).await
+                && let Ok(mtime) = meta.modified()
+            {
+                stat_results.push((*e, mtime, meta.len()));
+            }
+        }
 
         if stat_results.is_empty() {
             continue;
@@ -114,6 +116,7 @@ pub async fn run_classifier(
                 }
             }
 
+            let correlation_id = uuid::Uuid::new_v4();
             let _ = fp_tx
                 .send(ToFingerprint {
                     path: event.path.clone(),
@@ -121,6 +124,7 @@ pub async fn run_classifier(
                     mtime,
                     size_bytes,
                     existing_id: existing.map(|t| t.id),
+                    correlation_id,
                 })
                 .await;
         }

@@ -9,10 +9,20 @@ pub struct RawFileTags {
     pub artist: Option<String>,
     pub album: Option<String>,
     pub year: Option<i32>,
-    pub genre: Option<String>,
+    pub genres: Option<Vec<String>>,
     pub track_number: Option<u32>,
     pub disc_number: Option<u32>,
     pub duration_ms: Option<u32>,
+    pub bpm: Option<i32>,
+    pub isrc: Option<String>,
+    pub composer: Option<String>,
+    pub lyricist: Option<String>,
+    pub lyrics: Option<String>,
+    // Audio Properties
+    pub bitrate: Option<i32>,
+    pub sample_rate: Option<i32>,
+    pub channels: Option<i32>,
+    pub codec: Option<String>,
 }
 
 /// Chromaprint fingerprint result.
@@ -38,7 +48,12 @@ pub struct MbRecording {
     pub release_mbid: String,
     pub release_title: String,
     pub release_year: Option<i32>,
-    pub genre: Option<String>,
+    pub release_date: Option<chrono::NaiveDate>,
+    pub genres: Vec<String>,
+    pub record_label: Option<String>,
+    pub barcode: Option<String>,
+    pub isrc: Option<String>,
+    pub work_mbid: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +62,13 @@ pub struct MbArtistCredit {
     pub name: String,
     pub sort_name: String,
     pub join_phrase: Option<String>, // " feat. ", " & ", etc.
+}
+
+/// Credits extracted from a Work entity (composer/lyricist).
+#[derive(Debug, Clone)]
+pub struct MbWorkCredits {
+    pub composers: Vec<MbArtistCredit>,
+    pub lyricists: Vec<MbArtistCredit>,
 }
 
 #[async_trait]
@@ -62,6 +84,11 @@ pub trait AcoustIdPort: Send + Sync {
 #[async_trait]
 pub trait MusicBrainzPort: Send + Sync {
     async fn fetch_recording(&self, mbid: &str) -> Result<MbRecording, AppError>;
+    /// Fetch composer/lyricist credits from a Work entity.
+    async fn fetch_work_credits(&self, work_mbid: &str) -> Result<MbWorkCredits, AppError>;
+    /// Fetch label info from a Release entity.
+    /// Returns the first label name, or None if no label info.
+    async fn fetch_release_label(&self, release_mbid: &str) -> Result<Option<String>, AppError>;
 }
 
 #[async_trait]

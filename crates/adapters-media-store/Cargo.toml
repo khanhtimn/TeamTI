@@ -8,19 +8,21 @@ authors.workspace = true
 domain = { path = "../domain" }
 application = { path = "../application" }
 shared-config = { path = "../shared-config" }
-adapters-persistence = { path = "../adapters-persistence" }
 adapters-watcher = { path = "../adapters-watcher" }
 
-tokio.workspace = true
+tokio = { workspace = true, features = ["rt", "time", "sync", "fs"] }
 tracing.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
-uuid.workspace = true
-chrono.workspace = true
+uuid = { workspace = true, features = ["v4", "serde"] }
+chrono = { workspace = true, features = ["serde"] }
 bytes.workspace = true
-symphonia.workspace = true
-lofty = "0.23"
-unicode-normalization = "0.1"
-walkdir = "2"
-tokio-util = { version = "0.7", features = ["rt"] }
-chromaprint-next = "0.1.0"
+symphonia = { workspace = true, features = ["mp3", "aac", "isomp4", "alac", "ogg", "vorbis", "wav", "flac"] }
+lofty.workspace = true
+unicode-normalization.workspace = true
+walkdir.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
+chromaprint-next.workspace = true
+
+[dev-dependencies]
+lofty.workspace = true

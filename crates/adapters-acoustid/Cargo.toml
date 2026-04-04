@@ -1,0 +1,17 @@
+[package]
+name = "adapters-acoustid"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+application = { path = "../application" }
+domain = { path = "../domain" }
+reqwest = { workspace = true, features = ["json", "rustls", "form"] }
+governor = { workspace = true }
+nonzero_ext.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }

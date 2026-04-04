@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET file_modified_at = $2,\n                file_size_bytes  = $3,\n                blob_location    = $4,\n                updated_at       = now()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4565a4bd5ad4b8ad1b019bc0898b72d5d1913a968dc46e347f78fe771ae5abef"
+}

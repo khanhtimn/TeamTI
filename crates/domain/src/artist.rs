@@ -23,6 +23,8 @@ pub enum ArtistRole {
     Featuring,
     Remixer,
     Producer,
+    Composer,
+    Lyricist,
 }
 
 /// Join record: artist credited on an album.

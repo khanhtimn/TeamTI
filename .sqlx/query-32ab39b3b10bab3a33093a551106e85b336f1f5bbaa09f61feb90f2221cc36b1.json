@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO artists (id, name, sort_name, mbid, country, created_at)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ON CONFLICT (mbid) DO UPDATE SET\n                name      = EXCLUDED.name,\n                sort_name = EXCLUDED.sort_name,\n                country   = COALESCE(EXCLUDED.country, artists.country)\n            RETURNING id, name, sort_name, mbid, country, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "sort_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "mbid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "32ab39b3b10bab3a33093a551106e85b336f1f5bbaa09f61feb90f2221cc36b1"
+}

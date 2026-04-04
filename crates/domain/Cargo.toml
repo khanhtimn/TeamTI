@@ -5,8 +5,8 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
-uuid.workspace = true
-chrono.workspace = true
-serde.workspace = true
-sqlx.workspace = true
+uuid = { workspace = true, features = ["v4", "serde"] }
+chrono = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+sqlx = { workspace = true, features = ["derive", "postgres"] }
 thiserror.workspace = true

@@ -2,27 +2,7 @@ use domain::error::DomainError;
 use domain::media::PlayableSource;
 use std::path::PathBuf;
 
-/// Resolves a blob_location (relative to MEDIA_ROOT) to a PlayableSource.
-pub fn resolve_blob_to_playable(
-    media_root: &std::path::Path,
-    blob_location: &str,
-) -> Result<PlayableSource, DomainError> {
-    let path = media_root.join(blob_location);
-    if !path.exists() {
-        return Err(DomainError::NotFound(format!(
-            "File not found: {}",
-            path.display()
-        )));
-    }
-
-    Ok(PlayableSource::ResolvedPlayable {
-        path: path.to_string_lossy().to_string(),
-        duration_ms: None,
-    })
-}
-
 pub struct FsStore {
-    #[allow(dead_code)]
     root: PathBuf,
 }
 
@@ -45,7 +25,7 @@ impl MediaStore for FsStore {
         &self,
         blob_ref: &ManagedBlobRef,
     ) -> Result<PlayableSource, DomainError> {
-        let path = PathBuf::from(&blob_ref.absolute_path);
+        let path = self.root.join(&blob_ref.relative_path);
         if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
             return Err(DomainError::NotFound(format!(
                 "File not found: {}",
@@ -54,7 +34,7 @@ impl MediaStore for FsStore {
         }
 
         Ok(PlayableSource::ResolvedPlayable {
-            path: blob_ref.absolute_path.clone(),
+            path: path.to_string_lossy().to_string(),
             duration_ms: None,
         })
     }

@@ -4,7 +4,6 @@ use tokio::sync::{Semaphore, mpsc};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use adapters_persistence::repositories::track_repository::PgTrackRepository;
 use application::events::TrackScanned;
 use application::ports::repository::TrackRepository;
 use domain::{EnrichmentStatus, Track};
@@ -15,7 +14,7 @@ use crate::tag_reader::read_file;
 
 pub async fn run_fingerprint_worker(
     _config: Arc<Config>,
-    track_repo: Arc<PgTrackRepository>,
+    track_repo: Arc<dyn TrackRepository>,
     smb_semaphore: Arc<Semaphore>,
     fp_concurrency: Arc<Semaphore>,
     mut fp_rx: mpsc::Receiver<ToFingerprint>,
@@ -29,7 +28,7 @@ pub async fn run_fingerprint_worker(
 
         tokio::spawn(async move {
             // Step 1: Acquire fp_concurrency permit.
-            let _fp_permit = fp_sem
+            let fp_permit = fp_sem
                 .acquire_owned()
                 .await
                 .expect("fp_concurrency semaphore closed");
@@ -45,7 +44,7 @@ pub async fn run_fingerprint_worker(
             })
             .await;
 
-            drop(_fp_permit); // release fp_concurrency slot immediately after decode
+            drop(fp_permit); // release fp_concurrency slot — decode is done
 
             // Step 4: Handle result and write to DB.
             match decode_result {
@@ -100,10 +99,12 @@ pub async fn run_fingerprint_worker(
                         Ok(None) => {
                             // New audio content — insert and enqueue for enrichment.
                             let title = raw_tags.title.unwrap_or_else(|| {
-                                msg.path
-                                    .file_stem()
-                                    .map(|s| s.to_string_lossy().into_owned())
-                                    .unwrap_or_else(|| "Unknown".into())
+                                let stem = crate::text::normalize_filename_stem(&msg.path);
+                                if stem.is_empty() {
+                                    "Unknown".into()
+                                } else {
+                                    stem
+                                }
                             });
 
                             let track = Track {
@@ -114,8 +115,15 @@ pub async fn run_fingerprint_worker(
                                 track_number: raw_tags.track_number.map(|n| n as i32),
                                 disc_number: raw_tags.disc_number.map(|n| n as i32),
                                 duration_ms: Some(duration_ms as i32),
-                                genre: raw_tags.genre,
+                                genres: raw_tags.genres,
                                 year: raw_tags.year,
+                                bpm: raw_tags.bpm,
+                                isrc: raw_tags.isrc,
+                                lyrics: raw_tags.lyrics,
+                                bitrate: raw_tags.bitrate,
+                                sample_rate: raw_tags.sample_rate,
+                                channels: raw_tags.channels,
+                                codec: raw_tags.codec,
                                 audio_fingerprint: Some(fp.fingerprint.clone()),
                                 file_modified_at: Some(mtime),
                                 file_size_bytes: Some(msg.size_bytes as i64),
@@ -129,6 +137,7 @@ pub async fn run_fingerprint_worker(
                                 enriched_at: None,
                                 created_at: chrono::Utc::now(),
                                 updated_at: chrono::Utc::now(),
+                                tags_written_at: None,
                             };
 
                             match repo.insert(&track).await {
@@ -143,6 +152,8 @@ pub async fn run_fingerprint_worker(
                                                 track_id: inserted.id,
                                                 fingerprint: fp.fingerprint,
                                                 duration_secs: fp.duration_secs,
+                                                blob_location: rel.clone(),
+                                                correlation_id: msg.correlation_id,
                                             })
                                             .await;
                                     } else {

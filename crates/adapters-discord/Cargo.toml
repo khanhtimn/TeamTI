@@ -5,10 +5,19 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
-domain = { path = "../domain" }
+adapters-voice = { path = "../adapters-voice" }
+adapters-persistence = { path = "../adapters-persistence" }
 application = { path = "../application" }
+shared-config = { path = "../shared-config" }
 
-serenity.workspace = true
-tokio.workspace = true
-tracing.workspace = true
-uuid.workspace = true
+songbird = { workspace = true, features = ["serenity"] }
+serenity = { workspace = true, features = [
+    "voice",
+    "gateway",
+    "rustls_backend",
+    "model",
+] }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }

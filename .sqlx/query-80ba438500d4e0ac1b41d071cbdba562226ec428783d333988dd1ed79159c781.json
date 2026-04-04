@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET acoustid_id           = $2,\n                enrichment_confidence = $3,\n                updated_at            = now()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Float4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "80ba438500d4e0ac1b41d071cbdba562226ec428783d333988dd1ed79159c781"
+}

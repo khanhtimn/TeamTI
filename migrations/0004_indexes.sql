@@ -1,6 +1,5 @@
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_fingerprint
-    ON tracks(audio_fingerprint)
-    WHERE audio_fingerprint IS NOT NULL;
+    ON tracks(fingerprint_hash);
 
 CREATE INDEX IF NOT EXISTS idx_tracks_blob_location
     ON tracks(blob_location);

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET enrichment_status = 'pending',\n                enrichment_locked = false,\n                updated_at = now()\n            WHERE enrichment_status = 'enriching'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "7356549967af262459b86bba21b5bae8e89ecf929a6b82c3fbb31a943d01e1be"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET file_modified_at = $2,\n                file_size_bytes  = $3,\n                tags_written_at  = now(),\n                updated_at       = now()\n            WHERE id = $1\n              AND enrichment_status = 'done'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce82202ac8e383fbc3c90857875c04a07e395a0c0b633f7e3506186eb373d5ac"
+}

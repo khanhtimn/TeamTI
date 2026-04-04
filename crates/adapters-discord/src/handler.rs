@@ -1,219 +1,131 @@
-use serenity::async_trait;
-use serenity::builder::{CreateAutocompleteResponse, CreateInteractionResponse};
-use serenity::model::application::{CommandInteraction, Interaction};
-use serenity::model::event::FullEvent;
-use serenity::model::id::GuildId;
-use serenity::prelude::*;
+use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::{error, info, warn};
 
-use application::services::{
-    enqueue_track::EnqueueTrack, join_voice::JoinVoice, leave_voice::LeaveVoice,
-};
-use domain::guild::GuildId as DomainGuildId;
-use domain::playback::{QueueRequest, StartVoiceChannel};
+use serenity::async_trait;
+use serenity::model::application::Command;
+use serenity::model::event::FullEvent;
+use serenity::prelude::{Context, EventHandler};
 
-use crate::register;
-use crate::response::{respond_error, respond_success};
+use adapters_persistence::repositories::track_repository::PgTrackRepository;
 
-pub struct DiscordHandler {
-    pub target_guild_id: u64,
-    pub join_voice: Arc<JoinVoice>,
-    pub leave_voice: Arc<LeaveVoice>,
-    pub enqueue_track: Arc<EnqueueTrack>,
+#[derive(Clone)]
+pub struct DiscordEventHandler {
+    pub discord_guild_id: u64,
+    pub track_repo: Arc<PgTrackRepository>,
+    pub media_root: PathBuf,
+    pub auto_leave_secs: u64,
+    pub songbird: Arc<songbird::Songbird>,
+    pub guild_state: Arc<adapters_voice::state_map::GuildStateMap>,
 }
 
 #[async_trait]
-impl EventHandler for DiscordHandler {
+impl EventHandler for DiscordEventHandler {
     async fn dispatch(&self, ctx: &Context, event: &FullEvent) {
         match event {
             FullEvent::Ready { data_about_bot, .. } => {
-                info!("{} is connected!", data_about_bot.user.name);
-                let guild_id = GuildId::new(self.target_guild_id);
+                use crate::commands::{clear, leave, play, rescan};
 
-                if let Err(e) = register::register_guild_commands(&ctx.http, guild_id).await {
-                    error!("Failed to register commands: {:?}", e);
-                } else {
-                    info!(
-                        "Registered guild commands for guild {}",
-                        self.target_guild_id
-                    );
+                tracing::info!(
+                    username   = %data_about_bot.user.name,
+                    guild_count = data_about_bot.guilds.len(),
+                    operation  = "discord.ready",
+                    "bot connected to Discord"
+                );
+
+                let cmds = vec![
+                    play::register(),
+                    clear::register(),
+                    leave::register(),
+                    rescan::register(),
+                ];
+
+                // Clear all old global commands to prevent duplication
+                if let Err(e) = Command::set_global_commands(&ctx.http, &[]).await {
+                    tracing::warn!("Failed to clear global commands: {}", e);
+                }
+
+                // Register commands specifically to the configured guild for instant propagation
+                use serenity::all::GuildId;
+                let guild_id = GuildId::new(self.discord_guild_id);
+                let result = guild_id.set_commands(&ctx.http, &cmds).await;
+
+                match result {
+                    Ok(cmds) => tracing::info!(
+                        guild_id = self.discord_guild_id,
+                        count = cmds.len(),
+                        operation = "discord.commands_registered",
+                        "registered guild slash commands"
+                    ),
+                    Err(e) => tracing::error!(
+                        error     = %e,
+                        operation = "discord.commands_register_failed",
+                        "failed to register slash commands"
+                    ),
                 }
             }
-            FullEvent::InteractionCreate { interaction, .. } => match interaction {
-                Interaction::Command(command) => {
-                    self.handle_command(ctx, command).await;
+
+            FullEvent::InteractionCreate { interaction, .. } => {
+                use serenity::model::application::Interaction;
+
+                match interaction {
+                    Interaction::Command(cmd) => {
+                        let name = cmd.data.name.as_str();
+                        tracing::debug!(
+                            command    = name,
+                            user_id    = %cmd.user.id,
+                            guild_id   = %cmd.guild_id.unwrap_or_default(),
+                            operation  = "discord.command",
+                        );
+                        match name {
+                            "play" => {
+                                crate::commands::play::run(
+                                    &ctx.http,
+                                    &ctx.cache,
+                                    cmd,
+                                    &self.track_repo,
+                                    &self.media_root,
+                                    self.auto_leave_secs,
+                                    &self.songbird,
+                                    &self.guild_state,
+                                )
+                                .await
+                            }
+                            "clear" => {
+                                crate::commands::clear::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.songbird,
+                                    &self.guild_state,
+                                )
+                                .await
+                            }
+                            "leave" => {
+                                crate::commands::leave::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.songbird,
+                                    &self.guild_state,
+                                )
+                                .await
+                            }
+                            "rescan" => crate::commands::rescan::run(&ctx.http, cmd).await,
+                            unknown => tracing::warn!(
+                                command = unknown,
+                                operation = "discord.unknown_command",
+                                "received unknown command"
+                            ),
+                        }
+                    }
+
+                    Interaction::Autocomplete(ac) if ac.data.name == "play" => {
+                        crate::commands::play::autocomplete(&ctx.http, ac, &self.track_repo).await;
+                    }
+
+                    _ => {}
                 }
-                Interaction::Autocomplete(autocomplete) => {
-                    self.handle_autocomplete(ctx, autocomplete).await;
-                }
-                _ => {}
-            },
+            }
+
             _ => {}
-        }
-    }
-}
-
-impl DiscordHandler {
-    async fn handle_command(&self, ctx: &Context, command: &CommandInteraction) {
-        match command.data.name.as_str() {
-            "ping" => {
-                let _ = respond_success(ctx, command, "Pong!").await;
-            }
-            "join" => {
-                self.handle_join(ctx, command).await;
-            }
-            "leave" => {
-                self.handle_leave(ctx, command).await;
-            }
-            "play" => {
-                self.handle_play(ctx, command).await;
-            }
-            "scan" => {
-                self.handle_scan(ctx, command).await;
-            }
-            _ => {
-                let _ = respond_error(ctx, command, "Unknown command").await;
-            }
-        }
-    }
-
-    async fn handle_join(&self, ctx: &Context, command: &CommandInteraction) {
-        let guild_id = match command.guild_id {
-            Some(id) => id,
-            None => {
-                let _ = respond_error(ctx, command, "Commands must be used in a guild.").await;
-                return;
-            }
-        };
-
-        let channel_id = ctx.cache.guild(guild_id).and_then(|guild| {
-            guild
-                .voice_states
-                .get(&command.user.id)
-                .and_then(|vs| vs.channel_id)
-        });
-
-        match channel_id {
-            Some(c_id) => {
-                let req = QueueRequest {
-                    guild_id: DomainGuildId(guild_id.get()),
-                    voice_channel_id: StartVoiceChannel::Id(c_id.get()),
-                };
-                if let Err(e) = self.join_voice.execute(req).await {
-                    let _ = respond_error(ctx, command, &format!("Failed to join: {:?}", e)).await;
-                } else {
-                    let _ = respond_success(ctx, command, "Joined voice!").await;
-                }
-            }
-            None => {
-                let _ = respond_error(ctx, command, "You must be in a voice channel first.").await;
-            }
-        }
-    }
-
-    async fn handle_leave(&self, ctx: &Context, command: &CommandInteraction) {
-        if let Some(guild_id) = command.guild_id {
-            if let Err(e) = self
-                .leave_voice
-                .execute(DomainGuildId(guild_id.get()))
-                .await
-            {
-                let _ = respond_error(ctx, command, &format!("Failed to leave: {:?}", e)).await;
-            } else {
-                let _ = respond_success(ctx, command, "Left voice channel.").await;
-            }
-        }
-    }
-
-    async fn handle_play(&self, ctx: &Context, command: &CommandInteraction) {
-        let query_val = command
-            .data
-            .options
-            .iter()
-            .find(|o| o.name == "query")
-            .and_then(|o| o.value.as_str());
-
-        let guild_id = match command.guild_id {
-            Some(id) => id,
-            None => {
-                let _ = respond_error(ctx, command, "Must be used in a guild.").await;
-                return;
-            }
-        };
-
-        let asset_id_str = match query_val {
-            Some(v) => v,
-            None => {
-                let _ = respond_error(ctx, command, "No track selected.").await;
-                return;
-            }
-        };
-
-        let asset_id = match uuid::Uuid::parse_str(asset_id_str) {
-            Ok(id) => id,
-            Err(_) => {
-                let _ = respond_error(
-                    ctx,
-                    command,
-                    "Invalid selection. Please pick a track from the autocomplete list.",
-                )
-                .await;
-                return;
-            }
-        };
-
-        // Verify user is in a voice channel
-        let in_voice = ctx.cache.guild(guild_id).and_then(|guild| {
-            guild
-                .voice_states
-                .get(&command.user.id)
-                .and_then(|vs| vs.channel_id)
-        });
-
-        if in_voice.is_none() {
-            let _ = respond_error(ctx, command, "You must be in a voice channel.").await;
-            return;
-        }
-
-        let gid = DomainGuildId(guild_id.get());
-        let user_id = command.user.id.get();
-
-        match self
-            .enqueue_track
-            .execute_by_asset_id(asset_id, gid, user_id)
-            .await
-        {
-            Ok(result) => {
-                let msg = if let Some(ref artist) = result.artist {
-                    format!("▶ Queued: **{}** by **{}**", result.title, artist)
-                } else {
-                    format!("▶ Queued: **{}**", result.title)
-                };
-                let _ = respond_success(ctx, command, &msg).await;
-            }
-            Err(e) => {
-                let _ = respond_error(ctx, command, &format!("Failed to enqueue: {e}")).await;
-            }
-        }
-    }
-
-    async fn handle_scan(&self, ctx: &Context, command: &CommandInteraction) {
-        let _ = respond_success(ctx, command, "This command is being updated for v2.").await;
-    }
-
-    async fn handle_autocomplete(&self, ctx: &Context, autocomplete: &CommandInteraction) {
-        if autocomplete.data.name.as_str() != "play" {
-            return;
-        }
-
-        // v2 stub: return empty autocomplete results until TrackSearchPort is wired
-        let response = CreateInteractionResponse::Autocomplete(
-            CreateAutocompleteResponse::new().set_choices(Vec::new()),
-        );
-
-        if let Err(e) = autocomplete.create_response(&ctx.http, response).await {
-            warn!("Failed to send autocomplete response: {:?}", e);
         }
     }
 }

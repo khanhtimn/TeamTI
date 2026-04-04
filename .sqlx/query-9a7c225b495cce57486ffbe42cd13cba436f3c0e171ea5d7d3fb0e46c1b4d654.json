@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET title = COALESCE($2, title),\n                artist_display = COALESCE($3, artist_display),\n                album_id = COALESCE($4, album_id),\n                genres = COALESCE($5, genres),\n                year = COALESCE($6, year),\n                mbid = COALESCE($7, mbid),\n                acoustid_id = COALESCE($8, acoustid_id),\n                enrichment_confidence = COALESCE($9, enrichment_confidence),\n                isrc = COALESCE($10, isrc),\n                enrichment_status = 'done',\n                enrichment_locked = false,\n                enriched_at = now(),\n                updated_at = now()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "TextArray",
+        "Int4",
+        "Text",
+        "Text",
+        "Float4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9a7c225b495cce57486ffbe42cd13cba436f3c0e171ea5d7d3fb0e46c1b4d654"
+}

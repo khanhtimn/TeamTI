@@ -17,7 +17,6 @@ pub(crate) fn normalize_opt(s: Option<String>) -> Option<String> {
 
 /// Extract the filename stem from a path and normalize it to NFC.
 /// Falls back to empty string if the path has no filename.
-#[allow(dead_code)]
 pub(crate) fn normalize_filename_stem(path: &std::path::Path) -> String {
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     normalize(stem)

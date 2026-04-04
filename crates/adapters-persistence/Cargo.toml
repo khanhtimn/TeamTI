@@ -8,11 +8,11 @@ authors.workspace = true
 domain = { path = "../domain" }
 application = { path = "../application" }
 
-sqlx.workspace = true
-tokio.workspace = true
-serde.workspace = true
-uuid.workspace = true
-chrono.workspace = true
+sqlx = { workspace = true, features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "macros", "migrate"] }
+tokio = { workspace = true, features = ["rt", "time", "sync", "macros"] }
+serde = { workspace = true, features = ["derive"] }
+uuid = { workspace = true, features = ["v4", "serde"] }
+chrono = { workspace = true, features = ["serde"] }
 thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true

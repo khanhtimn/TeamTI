@@ -7,11 +7,11 @@ authors.workspace = true
 [dependencies]
 domain = { path = "../domain" }
 thiserror.workspace = true
-tokio.workspace = true
-uuid.workspace = true
-serde.workspace = true
+tokio = { workspace = true, features = ["sync", "time", "macros", "fs", "rt"] }
+uuid = { workspace = true, features = ["v4", "serde"] }
+serde = { workspace = true, features = ["derive"] }
 async-trait.workspace = true
-sqlx.workspace = true
-chrono.workspace = true
+chrono = { workspace = true, features = ["serde"] }
 bytes.workspace = true
 tracing.workspace = true
+

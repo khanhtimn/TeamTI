@@ -15,8 +15,16 @@ pub struct Track {
     pub track_number: Option<i32>,
     pub disc_number: Option<i32>,
     pub duration_ms: Option<i32>,
-    pub genre: Option<String>,
+    pub genres: Option<Vec<String>>,
     pub year: Option<i32>,
+
+    pub bpm: Option<i32>,
+    pub isrc: Option<String>,
+    pub lyrics: Option<String>,
+    pub bitrate: Option<i32>,
+    pub sample_rate: Option<i32>,
+    pub channels: Option<i32>,
+    pub codec: Option<String>,
 
     // File identity and change detection (no BLAKE3/file_hash)
     pub audio_fingerprint: Option<String>,
@@ -36,6 +44,9 @@ pub struct Track {
 
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Pass 4: records when enriched tags were written back to the audio file.
+    /// NULL = not yet written (or re-enriched since last write).
+    pub tags_written_at: Option<DateTime<Utc>>,
     // NOTE: search_text and search_vector are generated columns.
     // They are NOT included in INSERT/UPDATE statements.
     // They are read-only and excluded from the Track struct by default.

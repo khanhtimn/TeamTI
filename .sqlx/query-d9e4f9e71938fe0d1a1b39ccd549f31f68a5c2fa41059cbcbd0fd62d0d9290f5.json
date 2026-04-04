@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, title, artist_display, album_id, duration_ms, blob_location\n            FROM tracks\n            WHERE enrichment_status = 'done'\n              AND search_text LIKE $1\n            ORDER BY title ASC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "artist_display",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "album_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "duration_ms",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "blob_location",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "d9e4f9e71938fe0d1a1b39ccd549f31f68a5c2fa41059cbcbd0fd62d0d9290f5"
+}

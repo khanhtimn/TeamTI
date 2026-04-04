@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                ta.track_id, ta.artist_id, ta.role as \"role: ArtistRole\", ta.position,\n                a.id, a.name, a.sort_name, a.mbid, a.country, a.created_at\n            FROM track_artists ta\n            JOIN artists a ON a.id = ta.artist_id\n            WHERE ta.track_id = $1\n            ORDER BY ta.position ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "track_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "artist_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "role: ArtistRole",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "sort_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "mbid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "country",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "de5bacf90153a3c1e6cd6b7354c3d55c0c9007874b77dacd736816aaac5d3ac7"
+}

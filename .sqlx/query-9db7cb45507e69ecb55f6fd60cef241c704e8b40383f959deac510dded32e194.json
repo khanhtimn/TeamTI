@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET enrichment_status = 'file_missing',\n                enrichment_locked = false,\n                updated_at = now()\n            WHERE blob_location = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9db7cb45507e69ecb55f6fd60cef241c704e8b40383f959deac510dded32e194"
+}

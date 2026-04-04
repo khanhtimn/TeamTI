@@ -11,9 +11,13 @@ CREATE TABLE IF NOT EXISTS albums (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title           TEXT NOT NULL,
     release_year    INTEGER,
+    release_date    DATE,
     total_tracks    INTEGER,
     total_discs     INTEGER DEFAULT 1,
     mbid            TEXT UNIQUE,
+    record_label    TEXT,
+    upc_barcode     TEXT,
+    genres          TEXT[],
     cover_art_path  TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -35,10 +39,21 @@ CREATE TABLE IF NOT EXISTS tracks (
     track_number    INTEGER,
     disc_number     INTEGER DEFAULT 1,
     duration_ms     INTEGER,
-    genre           TEXT,
+    genres          TEXT[],
     year            INTEGER,
+    bpm             INTEGER,
+    isrc            TEXT,
+    lyrics          TEXT,
+    bitrate         INTEGER,
+    sample_rate     INTEGER,
+    channels        INTEGER,
+    codec           TEXT,
 
     audio_fingerprint   TEXT,
+    -- md5 hash of audio_fingerprint for indexing. Chromaprint encoded
+    -- fingerprints are ~3500 bytes, exceeding btree's 2704-byte row limit.
+    -- The 32-char hex hash is used for the UNIQUE index and ON CONFLICT.
+    fingerprint_hash    TEXT GENERATED ALWAYS AS (md5(audio_fingerprint)) STORED,
     file_modified_at    TIMESTAMPTZ,
     file_size_bytes     BIGINT,
     blob_location       TEXT NOT NULL,
@@ -57,8 +72,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     search_text TEXT GENERATED ALWAYS AS (
         lower(immutable_unaccent(
             normalize(coalesce(title, ''), NFC) || ' ' ||
-            normalize(coalesce(artist_display, ''), NFC) || ' ' ||
-            normalize(coalesce(genre, ''), NFC)
+            normalize(coalesce(artist_display, ''), NFC)
         ))
     ) STORED,
 

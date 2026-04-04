@@ -7,9 +7,8 @@ authors.workspace = true
 [dependencies]
 shared-config = { path = "../shared-config" }
 tokio = { workspace = true }
-notify = { version = "8", default-features = false, features = [
-    "macos_fsevent",
-] }
-notify-debouncer-full = "0.7"
+notify = { workspace = true, features = ["macos_fsevent"] }
+notify-debouncer-full.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
+application = { version = "0.1.0", path = "../application" }

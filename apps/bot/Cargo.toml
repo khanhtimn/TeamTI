@@ -11,14 +11,22 @@ adapters-discord = { path = "../../crates/adapters-discord" }
 adapters-voice = { path = "../../crates/adapters-voice" }
 adapters-persistence = { path = "../../crates/adapters-persistence" }
 adapters-media-store = { path = "../../crates/adapters-media-store" }
+adapters-acoustid = { path = "../../crates/adapters-acoustid" }
+adapters-musicbrainz = { path = "../../crates/adapters-musicbrainz" }
+adapters-cover-art = { path = "../../crates/adapters-cover-art" }
 shared-config = { path = "../../crates/shared-config" }
 shared-observability = { path = "../../crates/shared-observability" }
+dashmap = { workspace = true }
 
-tokio.workspace = true
-serenity.workspace = true
-songbird.workspace = true
+tokio = { workspace = true, features = ["full"] }
+serenity = { workspace = true, features = ["gateway", "rustls_backend", "model", "cache", "voice"] }
+songbird = { workspace = true, features = ["driver", "rustls", "serenity", "builtin-queue"] }
 tracing.workspace = true
 dotenvy.workspace = true
-symphonia.workspace = true
-rustls.workspace = true
-tokio-util = { version = "0.7", features = ["rt"] }
+symphonia = { workspace = true, features = ["mp3", "aac", "isomp4", "alac", "ogg", "vorbis", "wav", "flac"] }
+rustls = { workspace = true, features = ["ring", "std"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+sqlx = { workspace = true, features = ["postgres"] }

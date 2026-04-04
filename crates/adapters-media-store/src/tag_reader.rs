@@ -1,78 +1,130 @@
-use std::fs::File;
+use std::io::Cursor;
 use std::path::Path;
 
 use application::ports::enrichment::{AudioFingerprint, RawFileTags};
 use lofty::file::TaggedFileExt;
-use lofty::tag::Accessor;
+use lofty::probe::Probe;
+use lofty::tag::{Accessor, ItemKey};
 
-pub type TagReaderError = Box<dyn std::error::Error + Send + Sync>;
+use application::error::AppError;
 
 /// Decode the file at `path`, extract Chromaprint fingerprint and raw tags.
 /// Reads first 120 seconds of PCM only. Returns (fingerprint, tags, duration_ms).
 ///
 /// MUST be called from within spawn_blocking. Holds the SMB permit for its
 /// entire duration — caller is responsible for acquiring it beforehand.
-pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), TagReaderError> {
-    // --- lofty: read tags (sequential, same file) ---
-    let tagged_file = lofty::read_from_path(path)?;
+///
+/// PERF-5: Reads the file into memory once, then shares the buffer between
+/// lofty (tag extraction) and Symphonia (audio decode), eliminating the second
+/// SMB file open that was required when each library opened the file independently.
+pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), AppError> {
+    // Single file read into memory — eliminates double SMB open.
+    let file_bytes = std::fs::read(path).map_err(|e| AppError::Io {
+        path: Some(path.to_owned()),
+        source: e,
+    })?;
+
+    // --- lofty: read tags from in-memory buffer ---
+    let mut cursor = Cursor::new(&file_bytes);
+    let tagged_file = Probe::new(&mut cursor)
+        .guess_file_type()
+        .map_err(|e| AppError::TagRead {
+            path: path.to_owned(),
+            source: Box::new(e),
+        })?
+        .read()
+        .map_err(|e| AppError::TagRead {
+            path: path.to_owned(),
+            source: Box::new(e),
+        })?;
     let tag = tagged_file
         .primary_tag()
         .or_else(|| tagged_file.first_tag());
 
-    // Extract year from tags — lofty 0.23 removed Accessor::year()
-    let year: Option<i32> = tag.and_then(|t| {
-        // Try TDRC/DATE tag values for year
-        for item in t.items() {
-            let val = item.value().text()?;
-            // Parse YYYY from beginning of date string (e.g. "2024-01-15" or "2024")
-            if val.len() >= 4
-                && let Ok(y) = val[..4].parse::<i32>()
-                && (1900..=2100).contains(&y)
-            {
-                return Some(y);
-            }
-        }
-        None
-    });
+    // Extract year via lofty's built-in date accessor.
+    // Accessor::date() returns Option<Timestamp> where Timestamp.year is already
+    // parsed as u16 from the correct tag key for each format (TDRC for ID3v2,
+    // DATE for Vorbis comments, etc.) — no manual string parsing needed.
+    let year: Option<i32> = tag
+        .and_then(|t| t.date())
+        .map(|ts| ts.year as i32)
+        .filter(|y| (1900..=2100).contains(y));
 
-    let raw_tags = RawFileTags {
-        title: tag.and_then(|t| t.title().map(|s| s.to_string())),
-        artist: tag.and_then(|t| t.artist().map(|s| s.to_string())),
-        album: tag.and_then(|t| t.album().map(|s| s.to_string())),
+    let genres: Vec<String> = tag
+        .map(|t| {
+            t.items()
+                .filter(|i| i.key() == ItemKey::Genre)
+                .filter_map(|i| i.value().text().map(std::string::ToString::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut raw_tags = RawFileTags {
+        title: tag.and_then(|t| t.title().map(|s| s.into_owned())),
+        artist: tag.and_then(|t| t.artist().map(|s| s.into_owned())),
+        album: tag.and_then(|t| t.album().map(|s| s.into_owned())),
         year,
-        genre: tag.and_then(|t| t.genre().map(|s| s.to_string())),
+        genres: if genres.is_empty() {
+            None
+        } else {
+            Some(genres)
+        },
         track_number: tag.and_then(|t| t.track()),
         disc_number: tag.and_then(|t| t.disk()),
+        bpm: tag
+            .and_then(|t| t.get_string(ItemKey::Bpm))
+            .and_then(|s| s.parse::<i32>().ok()),
+        isrc: tag.and_then(|t| {
+            t.get_string(ItemKey::Isrc)
+                .map(std::string::ToString::to_string)
+        }),
+        composer: tag.and_then(|t| {
+            t.get_string(ItemKey::Composer)
+                .map(std::string::ToString::to_string)
+        }),
+        lyricist: tag.and_then(|t| {
+            t.get_string(ItemKey::Lyricist)
+                .map(std::string::ToString::to_string)
+        }),
+        lyrics: tag.and_then(|t| {
+            t.get_string(ItemKey::Lyrics)
+                .map(std::string::ToString::to_string)
+        }),
+        bitrate: None,
+        sample_rate: None,
+        channels: None,
+        codec: None,
         duration_ms: None, // filled from Symphonia below
     };
 
     // --- Symphonia: decode PCM for Chromaprint ---
-    // Two sequential file opens under one SMB permit:
-    // 1. lofty::read_from_path — reads tag headers
-    // 2. File::open → Symphonia decode — reads audio frames
-    // Both are covered by the SMB permit held by the caller.
-    // This is intentional: lofty does not expose its file handle
-    // for reuse, so two opens are required.
-    let file = File::open(path)?;
-    let mss = symphonia::core::io::MediaSourceStream::new(Box::new(file), Default::default());
+    // Reuse the same in-memory buffer — no second file open needed.
+    let cursor2 = Cursor::new(file_bytes);
+    let mss = symphonia::core::io::MediaSourceStream::new(Box::new(cursor2), Default::default());
 
-    let probed = symphonia::default::get_probe().format(
-        &Default::default(),
-        mss,
-        &Default::default(),
-        &Default::default(),
-    )?;
+    let probed = symphonia::default::get_probe()
+        .format(
+            &Default::default(),
+            mss,
+            &Default::default(),
+            &Default::default(),
+        )
+        .map_err(|e| AppError::Fingerprint {
+            path: path.to_owned(),
+            source: Box::new(e),
+        })?;
 
     let mut format = probed.format;
     let track = format
         .tracks()
         .iter()
         .find(|t| t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL)
-        .ok_or("no audio track found")?;
+        .ok_or_else(|| AppError::Fingerprint {
+            path: path.to_owned(),
+            source: Box::new(std::io::Error::other("no audio track found")),
+        })?;
 
     let track_id = track.id;
-    let sample_rate = track.codec_params.sample_rate.ok_or("no sample rate")?;
-    let channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(2);
 
     let duration_secs = track
         .codec_params
@@ -84,11 +136,31 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ta
         })
         .unwrap_or(0);
 
-    let mut decoder =
-        symphonia::default::get_codecs().make(&track.codec_params, &Default::default())?;
+    let codec = symphonia::default::get_codecs()
+        .get_codec(track.codec_params.codec)
+        .map(|d| d.long_name.to_string());
+
+    let bitrate = track.codec_params.bits_per_sample.map(|b| b as i32); // FLAC
+    let sample_rate = track.codec_params.sample_rate.map(|s| s as i32);
+    let channels = track.codec_params.channels.map(|c| c.count() as i32);
+
+    raw_tags.bitrate = bitrate;
+    raw_tags.sample_rate = sample_rate;
+    raw_tags.channels = channels;
+    raw_tags.codec = codec;
+
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &Default::default())
+        .map_err(|e| AppError::Fingerprint {
+            path: path.to_owned(),
+            source: Box::new(e),
+        })?;
+
+    let cp_sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
+    let cp_channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(2) as u16;
 
     let mut fp = chromaprint::Fingerprinter::new(chromaprint::Algorithm::default());
-    let _ = fp.start(sample_rate, channels as u16);
+    let _ = fp.start(cp_sample_rate, cp_channels);
 
     const MAX_DECODE_SECS: u64 = 120;
     let mut decoded_secs: f64 = 0.0;
@@ -117,8 +189,8 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ta
             Err(_) => continue,
         };
 
-        let frames = decoded.frames();
-        decoded_secs += frames as f64 / sample_rate as f64;
+        let frames = decoded.capacity();
+        decoded_secs += frames as f64 / cp_sample_rate as f64;
 
         // Convert to i16 samples for Chromaprint
         let spec = *decoded.spec();
@@ -130,12 +202,9 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ta
     }
 
     let _ = fp.finish();
-    let raw_fp = fp.fingerprint();
-    let fingerprint_str = raw_fp
-        .iter()
-        .map(|v| format!("{v:08x}"))
-        .collect::<Vec<_>>()
-        .join("");
+    // Use chromaprint's native encode() to produce the compressed base64
+    // string expected by the AcoustID API (DESIGN-1 fix).
+    let fingerprint_str = fp.encode();
 
     let duration_ms = if duration_secs > 0 {
         duration_secs * 1000
@@ -143,15 +212,14 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ta
         (decoded_secs * 1000.0) as u32
     };
 
+    raw_tags.duration_ms = Some(duration_ms);
+
     Ok((
         AudioFingerprint {
             fingerprint: fingerprint_str,
             duration_secs: duration_secs.max((decoded_secs as u32).max(1)),
         },
-        RawFileTags {
-            duration_ms: Some(duration_ms),
-            ..raw_tags
-        },
+        raw_tags,
         duration_ms,
     ))
 }

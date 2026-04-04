@@ -159,17 +159,15 @@ fn try_symphonia_metadata(path: &Path) -> Option<AudioMetadata> {
 
 /// Filename heuristic: "Title - Artist.ext" or whole stem as title.
 fn filename_heuristic(path: &Path) -> AudioMetadata {
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Unknown")
-        .trim();
+    let mut stem = crate::text::normalize_filename_stem(path);
+    if stem.is_empty() {
+        stem = "Unknown".to_string();
+    }
 
-    let original_filename = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("unknown")
-        .to_string();
+    let mut original_filename = crate::text::normalize_filename(path);
+    if original_filename.is_empty() {
+        original_filename = "unknown".to_string();
+    }
 
     if let Some((title_part, artist_part)) = stem.split_once(" - ") {
         AudioMetadata {

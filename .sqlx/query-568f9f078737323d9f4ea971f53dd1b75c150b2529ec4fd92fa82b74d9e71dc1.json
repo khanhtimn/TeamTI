@@ -1,0 +1,99 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO albums (id, title, release_year, release_date, total_tracks, total_discs,\n                                mbid, record_label, upc_barcode, genres, cover_art_path, created_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            ON CONFLICT (mbid) DO UPDATE SET\n                title        = EXCLUDED.title,\n                release_year = COALESCE(EXCLUDED.release_year, albums.release_year),\n                release_date = COALESCE(EXCLUDED.release_date, albums.release_date),\n                total_tracks = COALESCE(EXCLUDED.total_tracks, albums.total_tracks),\n                record_label = COALESCE(EXCLUDED.record_label, albums.record_label),\n                upc_barcode  = COALESCE(EXCLUDED.upc_barcode, albums.upc_barcode),\n                genres       = COALESCE(EXCLUDED.genres, albums.genres)\n            RETURNING id, title, release_year, release_date, total_tracks, total_discs,\n                      mbid, record_label, upc_barcode, genres, cover_art_path, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "release_year",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "release_date",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_tracks",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "total_discs",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "mbid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "record_label",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "upc_barcode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "genres",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "cover_art_path",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4",
+        "Date",
+        "Int4",
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "TextArray",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "568f9f078737323d9f4ea971f53dd1b75c150b2529ec4fd92fa82b74d9e71dc1"
+}

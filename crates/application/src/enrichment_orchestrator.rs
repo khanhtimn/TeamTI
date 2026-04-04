@@ -10,8 +10,8 @@ use crate::ports::repository::TrackRepository;
 pub struct EnrichmentOrchestrator {
     pub repo: Arc<dyn TrackRepository>,
     pub scan_interval_secs: u64,
-    pub failed_retry_limit: u32,
-    pub unmatched_retry_limit: u32,
+    pub failed_retry_limit: i32,
+    pub unmatched_retry_limit: i32,
 }
 
 impl EnrichmentOrchestrator {
@@ -32,11 +32,37 @@ impl EnrichmentOrchestrator {
 
                 // Reactive: new track from Fingerprint Worker
                 Some(scanned) = scan_rx.recv() => {
-                    info!("orchestrator: reactive enrich for track {}", scanned.track_id);
+                    info!(
+                        track_id = %scanned.track_id,
+                        correlation_id = %scanned.correlation_id,
+                        "orchestrator: reactive enrich for track"
+                    );
+                    // CRIT-3 fix: use claim_single to atomically set status='enriching',
+                    // preventing duplicate enrichment with the proactive poll path.
+                    // If the poll path already claimed it, claim_single returns None.
+                    let track = match self.repo.claim_single(scanned.track_id).await {
+                        Ok(Some(t)) => t,
+                        Ok(None) => {
+                            // Already claimed by poll path, or not in 'pending' state — skip.
+                            continue;
+                        }
+                        Err(e) => {
+                            warn!(
+                                track_id = %scanned.track_id,
+                                correlation_id = %scanned.correlation_id,
+                                error = %e,
+                                "orchestrator: claim_single failed"
+                            );
+                            continue;
+                        }
+                    };
                     let _ = acoustid_tx.send(AcoustIdRequest {
-                        track_id:      scanned.track_id,
-                        fingerprint:   scanned.fingerprint,
-                        duration_secs: scanned.duration_secs,
+                        track_id:            scanned.track_id,
+                        fingerprint:         scanned.fingerprint,
+                        duration_secs:       scanned.duration_secs,
+                        enrichment_attempts: track.enrichment_attempts,
+                        blob_location:       track.blob_location,
+                        correlation_id:      scanned.correlation_id,
                     }).await;
                 }
 
@@ -57,8 +83,8 @@ impl EnrichmentOrchestrator {
         match claimed {
             Ok(tracks) => {
                 info!(
-                    "orchestrator: claimed {} tracks for enrichment",
-                    tracks.len()
+                    count = tracks.len(),
+                    "orchestrator: claimed tracks for enrichment batch"
                 );
                 for track in tracks {
                     match (&track.audio_fingerprint, track.duration_ms) {
@@ -68,6 +94,9 @@ impl EnrichmentOrchestrator {
                                     track_id: track.id,
                                     fingerprint: fp.clone(),
                                     duration_secs: (dur / 1000) as u32,
+                                    enrichment_attempts: track.enrichment_attempts,
+                                    blob_location: track.blob_location.clone(),
+                                    correlation_id: uuid::Uuid::new_v4(),
                                 })
                                 .await;
                         }
@@ -81,7 +110,7 @@ impl EnrichmentOrchestrator {
                     }
                 }
             }
-            Err(e) => warn!("orchestrator: claim_for_enrichment error: {e}"),
+            Err(e) => warn!(error = %e, "orchestrator: claim_for_enrichment error"),
         }
     }
 }

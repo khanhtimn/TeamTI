@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE tracks\n                SET blob_location = $1, file_modified_at = $2, file_size_bytes = $3, updated_at = now()\n                WHERE fingerprint_hash = md5($4)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7668bc14a36a6fe71b7bf3835106c41445e5a65117e6d853fbd74ede47cd962c"
+}

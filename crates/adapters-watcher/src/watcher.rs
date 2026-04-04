@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use tracing::{error, warn};
 
 use crate::event::{FileEvent, FileEventKind};
-use shared_config::Config;
+use shared_config::Config as AppConfig;
 
 pub struct MediaWatcher {
     // Held alive for the lifetime of the watcher.
@@ -28,7 +28,9 @@ impl Drop for ScanGuard {
 }
 
 impl MediaWatcher {
-    pub fn start(config: Arc<Config>) -> Result<(Self, mpsc::Receiver<FileEvent>), WatcherError> {
+    pub fn start(
+        config: Arc<AppConfig>,
+    ) -> Result<(Self, mpsc::Receiver<FileEvent>), application::error::AppError> {
         let (tx, rx) = mpsc::channel::<FileEvent>(2048);
         let scan_in_progress = Arc::new(AtomicBool::new(false));
         let watch_path = config.media_root.clone();
@@ -100,11 +102,17 @@ impl MediaWatcher {
                 notify_debouncer_full::RecommendedCache::default(),
                 notify_config,
             )
-            .map_err(WatcherError::Init)?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                application::error::WatcherError::new(msg, Some(Box::new(e)))
+            })?;
 
         debouncer
             .watch(&watch_path, notify::RecursiveMode::Recursive)
-            .map_err(WatcherError::Watch)?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                application::error::WatcherError::new(msg, Some(Box::new(e)))
+            })?;
 
         // Box<dyn Any> erases the concrete Debouncer type.
         // The debouncer is kept alive until MediaWatcher is dropped.
@@ -115,12 +123,4 @@ impl MediaWatcher {
             rx,
         ))
     }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum WatcherError {
-    #[error("watcher init error: {0}")]
-    Init(#[from] notify::Error),
-    #[error("watcher watch path error: {0}")]
-    Watch(notify::Error),
 }

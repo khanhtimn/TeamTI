@@ -669,11 +669,11 @@ pub fn read_file(
     let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
 
     let raw_tags = RawFileTags {
-        title:        tag.and_then(|t| t.title().map(|s| s.to_string())),
-        artist:       tag.and_then(|t| t.artist().map(|s| s.to_string())),
-        album:        tag.and_then(|t| t.album().map(|s| s.to_string())),
+        title:        tag.and_then(|t| t.title().map(std::string::ToString::to_string)),
+        artist:       tag.and_then(|t| t.artist().map(std::string::ToString::to_string)),
+        album:        tag.and_then(|t| t.album().map(std::string::ToString::to_string)),
         year:         tag.and_then(|t| t.year()),
-        genre:        tag.and_then(|t| t.genre().map(|s| s.to_string())),
+        genre:        tag.and_then(|t| t.genre().map(std::string::ToString::to_string)),
         track_number: tag.and_then(|t| t.track()),
         disc_number:  tag.and_then(|t| t.disk()),
         duration_ms:  None, // filled from Symphonia below
