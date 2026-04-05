@@ -12,11 +12,11 @@ application = { path = "../application" }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util"] }
-governor = { workspace = true }
+governor = { workspace = true, features = ["std", "quanta"] }
 nonzero_ext.workspace = true
 tracing = { workspace = true }
 
 # Web / API
-reqwest = { workspace = true, features = ["json", "rustls"] }
+reqwest = { workspace = true, features = ["json", "rustls", "http2", "brotli", "gzip", "hickory-dns", "zstd"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

@@ -1,13 +1,14 @@
 [package]
 name = "adapters-musicbrainz"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 
 [dependencies]
 application = { path = "../application" }
-governor = { workspace = true }
+governor = { workspace = true, features = ["std", "quanta"] }
 nonzero_ext.workspace = true
-reqwest = { workspace = true, features = ["json", "rustls"] }
+reqwest = { workspace = true, features = ["json", "rustls", "http2", "brotli", "gzip", "hickory-dns", "zstd"] }
 chrono = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

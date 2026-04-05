@@ -14,7 +14,9 @@ songbird = { workspace = true, features = [
     "driver",
     "serenity",
     "rustls",
-    "builtin-queue"
+    "builtin-queue",
+    "tungstenite",
+    "gateway"
 ] }
 serenity = { workspace = true, features = [
     "gateway",

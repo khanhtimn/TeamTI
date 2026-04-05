@@ -75,7 +75,7 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   │   │   │   └── foldhash v0.1.5
 │   │   │   │   ├── hashlink v0.10.0
 │   │   │   │   │   └── hashbrown v0.15.5 (*)
-│   │   │   │   ├── indexmap v2.13.0
+│   │   │   │   ├── indexmap v2.13.1
 │   │   │   │   │   ├── equivalent v1.0.2
 │   │   │   │   │   └── hashbrown v0.16.1
 │   │   │   │   │       ├── allocator-api2 v0.2.21
@@ -84,19 +84,21 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   │   │   ├── log v0.4.29
 │   │   │   │   ├── memchr v2.8.0
 │   │   │   │   ├── once_cell v1.21.4
+│   │   │   │   │   ├── critical-section v1.2.0
+│   │   │   │   │   └── portable-atomic v1.13.1
 │   │   │   │   ├── percent-encoding v2.3.2
 │   │   │   │   ├── rustls v0.23.37
 │   │   │   │   │   ├── aws-lc-rs v1.16.2
 │   │   │   │   │   │   ├── aws-lc-sys v0.39.1
 │   │   │   │   │   │   │   [build-dependencies]
-│   │   │   │   │   │   │   ├── cc v1.2.58
+│   │   │   │   │   │   │   ├── cc v1.2.59
 │   │   │   │   │   │   │   │   ├── find-msvc-tools v0.1.9
 │   │   │   │   │   │   │   │   ├── jobserver v0.1.34
 │   │   │   │   │   │   │   │   │   └── libc v0.2.184
 │   │   │   │   │   │   │   │   ├── libc v0.2.184
 │   │   │   │   │   │   │   │   └── shlex v1.3.0
 │   │   │   │   │   │   │   ├── cmake v0.1.58
-│   │   │   │   │   │   │   │   └── cc v1.2.58 (*)
+│   │   │   │   │   │   │   │   └── cc v1.2.59 (*)
 │   │   │   │   │   │   │   ├── dunce v1.0.5
 │   │   │   │   │   │   │   └── fs_extra v1.3.0
 │   │   │   │   │   │   └── zeroize v1.8.2
@@ -104,7 +106,7 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   │   │   │   │           ├── proc-macro2 v1.0.106 (*)
 │   │   │   │   │   │           ├── quote v1.0.45 (*)
 │   │   │   │   │   │           └── syn v2.0.117 (*)
-│   │   │   │   │   ├── once_cell v1.21.4
+│   │   │   │   │   ├── once_cell v1.21.4 (*)
 │   │   │   │   │   ├── ring v0.17.14
 │   │   │   │   │   │   ├── cfg-if v1.0.4
 │   │   │   │   │   │   ├── getrandom v0.2.17
@@ -113,7 +115,7 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   │   │   │   │   ├── libc v0.2.184
 │   │   │   │   │   │   └── untrusted v0.9.0
 │   │   │   │   │   │   [build-dependencies]
-│   │   │   │   │   │   └── cc v1.2.58 (*)
+│   │   │   │   │   │   └── cc v1.2.59 (*)
 │   │   │   │   │   ├── rustls-pki-types v1.14.0
 │   │   │   │   │   │   └── zeroize v1.8.2 (*)
 │   │   │   │   │   ├── rustls-webpki v0.103.10
@@ -182,23 +184,23 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   │   │   │   │   ├── quote v1.0.45 (*)
 │   │   │   │   │   │   └── syn v2.0.117 (*)
 │   │   │   │   │   └── tracing-core v0.1.36
-│   │   │   │   │       └── once_cell v1.21.4
+│   │   │   │   │       └── once_cell v1.21.4 (*)
 │   │   │   │   ├── url v2.5.8
 │   │   │   │   │   ├── form_urlencoded v1.2.2
 │   │   │   │   │   │   └── percent-encoding v2.3.2
 │   │   │   │   │   ├── idna v1.1.0
 │   │   │   │   │   │   ├── idna_adapter v1.2.1
-│   │   │   │   │   │   │   ├── icu_normalizer v2.1.1
-│   │   │   │   │   │   │   │   ├── icu_collections v2.1.1
+│   │   │   │   │   │   │   ├── icu_normalizer v2.2.0
+│   │   │   │   │   │   │   │   ├── icu_collections v2.2.0
 │   │   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro)
 │   │   │   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.106 (*)
 │   │   │   │   │   │   │   │   │   │   ├── quote v1.0.45 (*)
 │   │   │   │   │   │   │   │   │   │   └── syn v2.0.117 (*)
-│   │   │   │   │   │   │   │   │   ├── potential_utf v0.1.4
-│   │   │   │   │   │   │   │   │   │   └── zerovec v0.11.5
-│   │   │   │   │   │   │   │   │   │       ├── yoke v0.8.1
+│   │   │   │   │   │   │   │   │   ├── potential_utf v0.1.5
+│   │   │   │   │   │   │   │   │   │   └── zerovec v0.11.6
+│   │   │   │   │   │   │   │   │   │       ├── yoke v0.8.2
 │   │   │   │   │   │   │   │   │   │       │   ├── stable_deref_trait v1.2.1
-│   │   │   │   │   │   │   │   │   │       │   ├── yoke-derive v0.8.1 (proc-macro)
+│   │   │   │   │   │   │   │   │   │       │   ├── yoke-derive v0.8.2 (proc-macro)
 │   │   │   │   │   │   │   │   │   │       │   │   ├── proc-macro2 v1.0.106 (*)
 │   │   │   │   │   │   │   │   │   │       │   │   ├── quote v1.0.45 (*)
 │   │   │   │   │   │   │   │   │   │       │   │   ├── syn v2.0.117 (*)
@@ -206,48 +208,49 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   │   │   │   │   │   │   │   │       │   │       ├── proc-macro2 v1.0.106 (*)
 │   │   │   │   │   │   │   │   │   │       │   │       ├── quote v1.0.45 (*)
 │   │   │   │   │   │   │   │   │   │       │   │       └── syn v2.0.117 (*)
-│   │   │   │   │   │   │   │   │   │       │   └── zerofrom v0.1.6
-│   │   │   │   │   │   │   │   │   │       │       └── zerofrom-derive v0.1.6 (proc-macro)
+│   │   │   │   │   │   │   │   │   │       │   └── zerofrom v0.1.7
+│   │   │   │   │   │   │   │   │   │       │       └── zerofrom-derive v0.1.7 (proc-macro)
 │   │   │   │   │   │   │   │   │   │       │           ├── proc-macro2 v1.0.106 (*)
 │   │   │   │   │   │   │   │   │   │       │           ├── quote v1.0.45 (*)
 │   │   │   │   │   │   │   │   │   │       │           ├── syn v2.0.117 (*)
 │   │   │   │   │   │   │   │   │   │       │           └── synstructure v0.13.2 (*)
-│   │   │   │   │   │   │   │   │   │       ├── zerofrom v0.1.6 (*)
-│   │   │   │   │   │   │   │   │   │       └── zerovec-derive v0.11.2 (proc-macro)
+│   │   │   │   │   │   │   │   │   │       ├── zerofrom v0.1.7 (*)
+│   │   │   │   │   │   │   │   │   │       └── zerovec-derive v0.11.3 (proc-macro)
 │   │   │   │   │   │   │   │   │   │           ├── proc-macro2 v1.0.106 (*)
 │   │   │   │   │   │   │   │   │   │           ├── quote v1.0.45 (*)
 │   │   │   │   │   │   │   │   │   │           └── syn v2.0.117 (*)
-│   │   │   │   │   │   │   │   │   ├── yoke v0.8.1 (*)
-│   │   │   │   │   │   │   │   │   ├── zerofrom v0.1.6 (*)
-│   │   │   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
-│   │   │   │   │   │   │   │   ├── icu_normalizer_data v2.1.1
-│   │   │   │   │   │   │   │   ├── icu_provider v2.1.1
+│   │   │   │   │   │   │   │   │   ├── utf8_iter v1.0.4
+│   │   │   │   │   │   │   │   │   ├── yoke v0.8.2 (*)
+│   │   │   │   │   │   │   │   │   ├── zerofrom v0.1.7 (*)
+│   │   │   │   │   │   │   │   │   └── zerovec v0.11.6 (*)
+│   │   │   │   │   │   │   │   ├── icu_normalizer_data v2.2.0
+│   │   │   │   │   │   │   │   ├── icu_provider v2.2.0
 │   │   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
-│   │   │   │   │   │   │   │   │   ├── icu_locale_core v2.1.1
+│   │   │   │   │   │   │   │   │   ├── icu_locale_core v2.2.0
 │   │   │   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
-│   │   │   │   │   │   │   │   │   │   ├── litemap v0.8.1
-│   │   │   │   │   │   │   │   │   │   ├── tinystr v0.8.2
+│   │   │   │   │   │   │   │   │   │   ├── litemap v0.8.2
+│   │   │   │   │   │   │   │   │   │   ├── tinystr v0.8.3
 │   │   │   │   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
-│   │   │   │   │   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
-│   │   │   │   │   │   │   │   │   │   ├── writeable v0.6.2
-│   │   │   │   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
-│   │   │   │   │   │   │   │   │   ├── writeable v0.6.2
-│   │   │   │   │   │   │   │   │   ├── yoke v0.8.1 (*)
-│   │   │   │   │   │   │   │   │   ├── zerofrom v0.1.6 (*)
-│   │   │   │   │   │   │   │   │   ├── zerotrie v0.2.3
+│   │   │   │   │   │   │   │   │   │   │   └── zerovec v0.11.6 (*)
+│   │   │   │   │   │   │   │   │   │   ├── writeable v0.6.3
+│   │   │   │   │   │   │   │   │   │   └── zerovec v0.11.6 (*)
+│   │   │   │   │   │   │   │   │   ├── writeable v0.6.3
+│   │   │   │   │   │   │   │   │   ├── yoke v0.8.2 (*)
+│   │   │   │   │   │   │   │   │   ├── zerofrom v0.1.7 (*)
+│   │   │   │   │   │   │   │   │   ├── zerotrie v0.2.4
 │   │   │   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
-│   │   │   │   │   │   │   │   │   │   ├── yoke v0.8.1 (*)
-│   │   │   │   │   │   │   │   │   │   └── zerofrom v0.1.6 (*)
-│   │   │   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
+│   │   │   │   │   │   │   │   │   │   ├── yoke v0.8.2 (*)
+│   │   │   │   │   │   │   │   │   │   └── zerofrom v0.1.7 (*)
+│   │   │   │   │   │   │   │   │   └── zerovec v0.11.6 (*)
 │   │   │   │   │   │   │   │   ├── smallvec v1.15.1 (*)
-│   │   │   │   │   │   │   │   └── zerovec v0.11.5 (*)
-│   │   │   │   │   │   │   └── icu_properties v2.1.2
-│   │   │   │   │   │   │       ├── icu_collections v2.1.1 (*)
-│   │   │   │   │   │   │       ├── icu_locale_core v2.1.1 (*)
-│   │   │   │   │   │   │       ├── icu_properties_data v2.1.2
-│   │   │   │   │   │   │       ├── icu_provider v2.1.1 (*)
-│   │   │   │   │   │   │       ├── zerotrie v0.2.3 (*)
-│   │   │   │   │   │   │       └── zerovec v0.11.5 (*)
+│   │   │   │   │   │   │   │   └── zerovec v0.11.6 (*)
+│   │   │   │   │   │   │   └── icu_properties v2.2.0
+│   │   │   │   │   │   │       ├── icu_collections v2.2.0 (*)
+│   │   │   │   │   │   │       ├── icu_locale_core v2.2.0 (*)
+│   │   │   │   │   │   │       ├── icu_properties_data v2.2.0
+│   │   │   │   │   │   │       ├── icu_provider v2.2.0 (*)
+│   │   │   │   │   │   │       ├── zerotrie v0.2.4 (*)
+│   │   │   │   │   │   │       └── zerovec v0.11.6 (*)
 │   │   │   │   │   │   ├── smallvec v1.15.1 (*)
 │   │   │   │   │   │   └── utf8_iter v1.0.4
 │   │   │   │   │   ├── percent-encoding v2.3.2
@@ -256,7 +259,14 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   │   │   ├── uuid v1.23.0
 │   │   │   │   │   ├── getrandom v0.4.2
 │   │   │   │   │   │   ├── cfg-if v1.0.4
-│   │   │   │   │   │   └── libc v0.2.184
+│   │   │   │   │   │   ├── libc v0.2.184
+│   │   │   │   │   │   └── rand_core v0.10.0
+│   │   │   │   │   ├── rand v0.10.0
+│   │   │   │   │   │   ├── chacha20 v0.10.0
+│   │   │   │   │   │   │   ├── cfg-if v1.0.4
+│   │   │   │   │   │   │   └── rand_core v0.10.0
+│   │   │   │   │   │   ├── getrandom v0.4.2 (*)
+│   │   │   │   │   │   └── rand_core v0.10.0
 │   │   │   │   │   └── serde_core v1.0.228
 │   │   │   │   └── webpki-roots v0.26.11
 │   │   │   │       └── webpki-roots v1.0.6
@@ -289,7 +299,7 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   │   │   │   │   └── slab v0.4.12
 │   │   │   │   │   ├── hashbrown v0.15.5 (*)
 │   │   │   │   │   ├── hashlink v0.10.0 (*)
-│   │   │   │   │   ├── indexmap v2.13.0 (*)
+│   │   │   │   │   ├── indexmap v2.13.1 (*)
 │   │   │   │   │   ├── log v0.4.29
 │   │   │   │   │   ├── memchr v2.8.0
 │   │   │   │   │   ├── once_cell v1.21.4
@@ -417,7 +427,7 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   │       ├── log v0.4.29
 │   │   │       ├── md-5 v0.10.6 (*)
 │   │   │       ├── memchr v2.8.0
-│   │   │       ├── once_cell v1.21.4
+│   │   │       ├── once_cell v1.21.4 (*)
 │   │   │       ├── rand v0.8.5
 │   │   │       │   ├── libc v0.2.184
 │   │   │       │   ├── rand_chacha v0.3.1
@@ -452,6 +462,10 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   ├── nonzero_ext v0.3.0
 │   ├── parking_lot v0.12.5 (*)
 │   ├── portable-atomic v1.13.1
+│   ├── quanta v0.12.6
+│   │   ├── crossbeam-utils v0.8.21
+│   │   ├── libc v0.2.184
+│   │   └── once_cell v1.21.4 (*)
 │   ├── smallvec v1.15.1 (*)
 │   ├── spinning_top v0.3.0
 │   │   └── lock_api v0.4.14 (*)
@@ -462,9 +476,78 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   ├── bytes v1.11.1
 │   ├── futures-core v0.3.32
 │   ├── futures-util v0.3.32 (*)
-│   ├── http v1.4.0
+│   ├── h2 v0.4.13
+│   │   ├── atomic-waker v1.1.2
 │   │   ├── bytes v1.11.1
-│   │   └── itoa v1.0.18
+│   │   ├── fnv v1.0.7
+│   │   ├── futures-core v0.3.32
+│   │   ├── futures-sink v0.3.32
+│   │   ├── http v1.4.0
+│   │   │   ├── bytes v1.11.1
+│   │   │   └── itoa v1.0.18
+│   │   ├── indexmap v2.13.1 (*)
+│   │   ├── slab v0.4.12
+│   │   ├── tokio v1.51.0 (*)
+│   │   ├── tokio-util v0.7.18
+│   │   │   ├── bytes v1.11.1
+│   │   │   ├── futures-core v0.3.32
+│   │   │   ├── futures-sink v0.3.32
+│   │   │   ├── futures-util v0.3.32 (*)
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   └── tokio v1.51.0 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── hickory-resolver v0.25.2
+│   │   ├── cfg-if v1.0.4
+│   │   ├── futures-util v0.3.32 (*)
+│   │   ├── hickory-proto v0.25.2
+│   │   │   ├── async-trait v0.1.89 (proc-macro) (*)
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── data-encoding v2.10.0
+│   │   │   ├── enum-as-inner v0.6.1 (proc-macro)
+│   │   │   │   ├── heck v0.5.0
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   ├── futures-channel v0.3.32 (*)
+│   │   │   ├── futures-io v0.3.32
+│   │   │   ├── futures-util v0.3.32 (*)
+│   │   │   ├── idna v1.1.0 (*)
+│   │   │   ├── ipnet v2.12.0
+│   │   │   ├── once_cell v1.21.4 (*)
+│   │   │   ├── rand v0.9.2
+│   │   │   │   ├── rand_chacha v0.9.0
+│   │   │   │   │   ├── ppv-lite86 v0.2.21 (*)
+│   │   │   │   │   └── rand_core v0.9.5
+│   │   │   │   │       └── getrandom v0.3.4
+│   │   │   │   │           ├── cfg-if v1.0.4
+│   │   │   │   │           └── libc v0.2.184
+│   │   │   │   └── rand_core v0.9.5 (*)
+│   │   │   ├── thiserror v2.0.18 (*)
+│   │   │   ├── tinyvec v1.11.0 (*)
+│   │   │   ├── tokio v1.51.0 (*)
+│   │   │   ├── tracing v0.1.44 (*)
+│   │   │   └── url v2.5.8 (*)
+│   │   ├── moka v0.12.15
+│   │   │   ├── crossbeam-channel v0.5.15
+│   │   │   │   └── crossbeam-utils v0.8.21
+│   │   │   ├── crossbeam-epoch v0.9.18
+│   │   │   │   └── crossbeam-utils v0.8.21
+│   │   │   ├── crossbeam-utils v0.8.21
+│   │   │   ├── equivalent v1.0.2
+│   │   │   ├── parking_lot v0.12.5 (*)
+│   │   │   ├── portable-atomic v1.13.1
+│   │   │   ├── smallvec v1.15.1 (*)
+│   │   │   ├── tagptr v0.2.0
+│   │   │   └── uuid v1.23.0 (*)
+│   │   ├── once_cell v1.21.4 (*)
+│   │   ├── parking_lot v0.12.5 (*)
+│   │   ├── rand v0.9.2 (*)
+│   │   ├── resolv-conf v0.7.6
+│   │   ├── smallvec v1.15.1 (*)
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── tokio v1.51.0 (*)
+│   │   └── tracing v0.1.44 (*)
+│   ├── http v1.4.0 (*)
 │   ├── http-body v1.0.1
 │   │   ├── bytes v1.11.1
 │   │   └── http v1.4.0 (*)
@@ -479,6 +562,7 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   ├── bytes v1.11.1
 │   │   ├── futures-channel v0.3.32 (*)
 │   │   ├── futures-core v0.3.32
+│   │   ├── h2 v0.4.13 (*)
 │   │   ├── http v1.4.0 (*)
 │   │   ├── http-body v1.0.1 (*)
 │   │   ├── httparse v1.10.1
@@ -522,6 +606,7 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   └── unicase v2.9.0
 │   │   [build-dependencies]
 │   │   └── unicase v2.9.0
+│   ├── once_cell v1.21.4 (*)
 │   ├── percent-encoding v2.3.2
 │   ├── pin-project-lite v0.2.17
 │   ├── rustls v0.23.37 (*)
@@ -553,13 +638,7 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   └── futures-core v0.3.32
 │   ├── tokio v1.51.0 (*)
 │   ├── tokio-rustls v0.26.4 (*)
-│   ├── tokio-util v0.7.18
-│   │   ├── bytes v1.11.1
-│   │   ├── futures-core v0.3.32
-│   │   ├── futures-sink v0.3.32
-│   │   ├── futures-util v0.3.32 (*)
-│   │   ├── pin-project-lite v0.2.17
-│   │   └── tokio v1.51.0 (*)
+│   ├── tokio-util v0.7.18 (*)
 │   ├── tower v0.5.3
 │   │   ├── futures-core v0.3.32
 │   │   ├── futures-util v0.3.32 (*)
@@ -569,13 +648,45 @@ adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapt
 │   │   ├── tower-layer v0.3.3
 │   │   └── tower-service v0.3.3
 │   ├── tower-http v0.6.8
+│   │   ├── async-compression v0.4.41
+│   │   │   ├── compression-codecs v0.4.37
+│   │   │   │   ├── brotli v8.0.2
+│   │   │   │   │   ├── alloc-no-stdlib v2.0.4
+│   │   │   │   │   ├── alloc-stdlib v0.2.2
+│   │   │   │   │   │   └── alloc-no-stdlib v2.0.4
+│   │   │   │   │   └── brotli-decompressor v5.0.0
+│   │   │   │   │       ├── alloc-no-stdlib v2.0.4
+│   │   │   │   │       └── alloc-stdlib v0.2.2 (*)
+│   │   │   │   ├── compression-core v0.4.31
+│   │   │   │   ├── flate2 v1.1.9
+│   │   │   │   │   ├── crc32fast v1.5.0
+│   │   │   │   │   │   └── cfg-if v1.0.4
+│   │   │   │   │   ├── miniz_oxide v0.8.9
+│   │   │   │   │   │   ├── adler2 v2.0.1
+│   │   │   │   │   │   └── simd-adler32 v0.3.9
+│   │   │   │   │   └── zlib-rs v0.6.3
+│   │   │   │   ├── memchr v2.8.0
+│   │   │   │   ├── zstd v0.13.3
+│   │   │   │   │   └── zstd-safe v7.2.4
+│   │   │   │   │       └── zstd-sys v2.0.16+zstd.1.5.7
+│   │   │   │   │           [build-dependencies]
+│   │   │   │   │           ├── cc v1.2.59 (*)
+│   │   │   │   │           └── pkg-config v0.3.32
+│   │   │   │   └── zstd-safe v7.2.4 (*)
+│   │   │   ├── compression-core v0.4.31
+│   │   │   ├── pin-project-lite v0.2.17
+│   │   │   └── tokio v1.51.0 (*)
 │   │   ├── bitflags v2.11.0
 │   │   ├── bytes v1.11.1
+│   │   ├── futures-core v0.3.32
 │   │   ├── futures-util v0.3.32 (*)
 │   │   ├── http v1.4.0 (*)
 │   │   ├── http-body v1.0.1 (*)
+│   │   ├── http-body-util v0.1.3 (*)
 │   │   ├── iri-string v0.7.12
 │   │   ├── pin-project-lite v0.2.17
+│   │   ├── tokio v1.51.0 (*)
+│   │   ├── tokio-util v0.7.18 (*)
 │   │   ├── tower v0.5.3 (*)
 │   │   ├── tower-layer v0.3.3
 │   │   └── tower-service v0.3.3
@@ -594,13 +705,6 @@ adapters-cover-art v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adap
 ├── lofty v0.23.3
 │   ├── byteorder v1.5.0
 │   ├── data-encoding v2.10.0
-│   ├── flate2 v1.1.9
-│   │   ├── crc32fast v1.5.0
-│   │   │   └── cfg-if v1.0.4
-│   │   ├── miniz_oxide v0.8.9
-│   │   │   ├── adler2 v2.0.1
-│   │   │   └── simd-adler32 v0.3.9
-│   │   └── zlib-rs v0.6.3
 │   ├── lofty_attr v0.12.0 (proc-macro)
 │   │   ├── proc-macro2 v1.0.106 (*)
 │   │   ├── quote v1.0.45 (*)
@@ -635,11 +739,11 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   │   ├── crossbeam-utils v0.8.21
 │   │   ├── hashbrown v0.14.5
 │   │   ├── lock_api v0.4.14 (*)
-│   │   ├── once_cell v1.21.4
+│   │   ├── once_cell v1.21.4 (*)
 │   │   ├── parking_lot_core v0.9.12 (*)
 │   │   └── serde v1.0.228 (*)
 │   ├── domain v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/domain) (*)
-│   ├── serenity v0.12.5 (https://github.com/serenity-rs/serenity?branch=next#2fdbd065)
+│   ├── serenity v0.12.5 (https://github.com/serenity-rs/serenity?branch=next#71843741)
 │   │   ├── aformat v0.1.8
 │   │   │   ├── aformat-macros v0.1.6 (proc-macro)
 │   │   │   │   ├── bytestring v1.5.0
@@ -683,7 +787,6 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   │   │   ├── syn v2.0.117 (*)
 │   │   │   └── to-arraystring v0.2.2 (*)
 │   │   ├── bytes v1.11.1
-│   │   ├── chrono v0.4.44 (*)
 │   │   ├── dashmap v6.1.0 (*)
 │   │   ├── extract_map v0.3.1
 │   │   │   ├── hashbrown v0.15.5 (*)
@@ -749,14 +852,7 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   │   │   │   ├── http v1.4.0 (*)
 │   │   │   │   ├── httparse v1.10.1
 │   │   │   │   ├── log v0.4.29
-│   │   │   │   ├── rand v0.9.2
-│   │   │   │   │   ├── rand_chacha v0.9.0
-│   │   │   │   │   │   ├── ppv-lite86 v0.2.21 (*)
-│   │   │   │   │   │   └── rand_core v0.9.5
-│   │   │   │   │   │       └── getrandom v0.3.4
-│   │   │   │   │   │           ├── cfg-if v1.0.4
-│   │   │   │   │   │           └── libc v0.2.184
-│   │   │   │   │   └── rand_core v0.9.5 (*)
+│   │   │   │   ├── rand v0.9.2 (*)
 │   │   │   │   ├── rustls v0.23.37 (*)
 │   │   │   │   ├── rustls-pki-types v1.14.0 (*)
 │   │   │   │   ├── sha1 v0.10.6
@@ -769,13 +865,7 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   │   │   └── webpki-roots v0.26.11 (*)
 │   │   ├── tracing v0.1.44 (*)
 │   │   ├── url v2.5.8 (*)
-│   │   ├── zeroize v1.8.2 (*)
-│   │   └── zstd v0.13.3
-│   │       └── zstd-safe v7.2.4
-│   │           └── zstd-sys v2.0.16+zstd.1.5.7
-│   │               [build-dependencies]
-│   │               ├── cc v1.2.58 (*)
-│   │               └── pkg-config v0.3.32
+│   │   └── zeroize v1.8.2 (*)
 │   ├── shared-config v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/shared-config)
 │   │   └── dotenvy v0.15.7
 │   ├── songbird v0.5.0 (https://github.com/serenity-rs/songbird?branch=serenity-next#7d964c5a)
@@ -861,8 +951,7 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   │   │   │   │   ├── either v1.15.0 (*)
 │   │   │   │   │   └── rayon-core v1.13.0
 │   │   │   │   │       ├── crossbeam-deque v0.8.6
-│   │   │   │   │       │   ├── crossbeam-epoch v0.9.18
-│   │   │   │   │       │   │   └── crossbeam-utils v0.8.21
+│   │   │   │   │       │   ├── crossbeam-epoch v0.9.18 (*)
 │   │   │   │   │       │   └── crossbeam-utils v0.8.21
 │   │   │   │   │       └── crossbeam-utils v0.8.21
 │   │   │   │   ├── serde v1.0.228 (*)
@@ -880,7 +969,7 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   │   │   │   │   │   └── zeroize v1.8.2 (*)
 │   │   │   │   │   │   [build-dependencies]
 │   │   │   │   │   │   └── rustc_version v0.4.1
-│   │   │   │   │   │       └── semver v1.0.27
+│   │   │   │   │   │       └── semver v1.0.28
 │   │   │   │   │   ├── ed25519 v2.2.3
 │   │   │   │   │   │   └── signature v2.2.0
 │   │   │   │   │   │       ├── digest v0.10.7 (*)
@@ -1118,8 +1207,7 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   │   │               ├── num-integer v0.1.46 (*)
 │   │   │               └── strength_reduce v0.2.4
 │   │   ├── rusty_pool v0.7.0
-│   │   │   ├── crossbeam-channel v0.5.15
-│   │   │   │   └── crossbeam-utils v0.8.21
+│   │   │   ├── crossbeam-channel v0.5.15 (*)
 │   │   │   ├── futures v0.3.32 (*)
 │   │   │   ├── futures-channel v0.3.32 (*)
 │   │   │   ├── futures-executor v0.3.32 (*)
@@ -1135,7 +1223,7 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   │   │   │   └── serde v1.0.228 (*)
 │   │   │   └── serde_json v1.0.149 (*)
 │   │   ├── serde_json v1.0.149 (*)
-│   │   ├── serenity v0.12.5 (https://github.com/serenity-rs/serenity?branch=next#2fdbd065) (*)
+│   │   ├── serenity v0.12.5 (https://github.com/serenity-rs/serenity?branch=next#71843741) (*)
 │   │   ├── serenity-voice-model v0.3.0
 │   │   │   ├── bitflags v2.11.0
 │   │   │   ├── num-traits v0.2.19 (*)
@@ -1240,13 +1328,7 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   │   │   │   ├── lazy_static v1.5.0
 │   │   │   │   ├── log v0.4.29
 │   │   │   │   └── symphonia-core v0.5.5 (*)
-│   │   │   ├── symphonia-codec-adpcm v0.5.5
-│   │   │   │   ├── log v0.4.29
-│   │   │   │   └── symphonia-core v0.5.5 (*)
 │   │   │   ├── symphonia-codec-alac v0.5.5
-│   │   │   │   ├── log v0.4.29
-│   │   │   │   └── symphonia-core v0.5.5 (*)
-│   │   │   ├── symphonia-codec-pcm v0.5.5
 │   │   │   │   ├── log v0.4.29
 │   │   │   │   └── symphonia-core v0.5.5 (*)
 │   │   │   ├── symphonia-codec-vorbis v0.5.5
@@ -1256,12 +1338,6 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   │   │   ├── symphonia-core v0.5.5 (*)
 │   │   │   ├── symphonia-format-isomp4 v0.5.5
 │   │   │   │   ├── encoding_rs v0.8.35 (*)
-│   │   │   │   ├── log v0.4.29
-│   │   │   │   ├── symphonia-core v0.5.5 (*)
-│   │   │   │   ├── symphonia-metadata v0.5.5 (*)
-│   │   │   │   └── symphonia-utils-xiph v0.5.5 (*)
-│   │   │   ├── symphonia-format-mkv v0.5.5
-│   │   │   │   ├── lazy_static v1.5.0
 │   │   │   │   ├── log v0.4.29
 │   │   │   │   ├── symphonia-core v0.5.5 (*)
 │   │   │   │   ├── symphonia-metadata v0.5.5 (*)
@@ -1315,12 +1391,24 @@ adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapte
 │   └── uuid v1.23.0 (*)
 ├── application v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/application) (*)
 ├── async-trait v0.1.89 (proc-macro) (*)
-├── serenity v0.12.5 (https://github.com/serenity-rs/serenity?branch=next#2fdbd065) (*)
+├── serenity v0.12.5 (https://github.com/serenity-rs/serenity?branch=next#71843741) (*)
 ├── shared-config v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/shared-config) (*)
 ├── songbird v0.5.0 (https://github.com/serenity-rs/songbird?branch=serenity-next#7d964c5a) (*)
 ├── tokio v1.51.0 (*)
 ├── tracing v0.1.44 (*)
 └── uuid v1.23.0 (*)
+
+adapters-lyrics v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapters-lyrics)
+├── application v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/application) (*)
+├── async-trait v0.1.89 (proc-macro) (*)
+├── governor v0.10.4 (*)
+├── nonzero_ext v0.3.0
+├── reqwest v0.13.2 (*)
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149 (*)
+├── thiserror v2.0.18 (*)
+├── tokio v1.51.0 (*)
+└── tracing v0.1.44 (*)
 
 adapters-media-store v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapters-media-store)
 ├── adapters-watcher v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapters-watcher)
@@ -1392,6 +1480,7 @@ bot v0.1.0 (/Users/khanhtimn/Documents/project/teamti/apps/bot)
 ├── adapters-acoustid v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapters-acoustid) (*)
 ├── adapters-cover-art v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapters-cover-art) (*)
 ├── adapters-discord v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapters-discord) (*)
+├── adapters-lyrics v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapters-lyrics) (*)
 ├── adapters-media-store v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapters-media-store) (*)
 ├── adapters-musicbrainz v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapters-musicbrainz) (*)
 ├── adapters-persistence v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/adapters-persistence) (*)
@@ -1401,7 +1490,7 @@ bot v0.1.0 (/Users/khanhtimn/Documents/project/teamti/apps/bot)
 ├── domain v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/domain) (*)
 ├── dotenvy v0.15.7
 ├── rustls v0.23.37 (*)
-├── serenity v0.12.5 (https://github.com/serenity-rs/serenity?branch=next#2fdbd065) (*)
+├── serenity v0.12.5 (https://github.com/serenity-rs/serenity?branch=next#71843741) (*)
 ├── shared-config v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/shared-config) (*)
 ├── shared-observability v0.1.0 (/Users/khanhtimn/Documents/project/teamti/crates/shared-observability)
 │   ├── tracing v0.1.44 (*)
@@ -1410,7 +1499,7 @@ bot v0.1.0 (/Users/khanhtimn/Documents/project/teamti/apps/bot)
 │       │   └── regex-automata v0.4.14
 │       │       └── regex-syntax v0.8.10
 │       ├── nu-ansi-term v0.50.3
-│       ├── once_cell v1.21.4
+│       ├── once_cell v1.21.4 (*)
 │       ├── regex-automata v0.4.14 (*)
 │       ├── serde v1.0.228 (*)
 │       ├── serde_json v1.0.149 (*)

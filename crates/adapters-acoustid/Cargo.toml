@@ -1,13 +1,14 @@
 [package]
 name = "adapters-acoustid"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 
 [dependencies]
 application = { path = "../application" }
 domain = { path = "../domain" }
-reqwest = { workspace = true, features = ["json", "rustls", "form"] }
-governor = { workspace = true }
+reqwest = { workspace = true, features = ["json", "rustls", "form", "http2", "brotli", "gzip", "hickory-dns", "zstd"] }
+governor = { workspace = true, features = ["std", "quanta"] }
 nonzero_ext.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
