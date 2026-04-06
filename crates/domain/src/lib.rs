@@ -14,4 +14,7 @@ pub use album::Album;
 pub use artist::{AlbumArtist, Artist, ArtistRole, TrackArtist};
 pub use enrichment::EnrichmentStatus;
 pub use track::Track;
-pub use user_library::{Favorite, ListenEvent, Playlist, PlaylistItem};
+pub use user_library::{
+    Favorite, FavouritesPage, ListenEvent, Playlist, PlaylistItem, PlaylistPage, PlaylistSummary,
+    PlaylistVisibility,
+};

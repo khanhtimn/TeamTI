@@ -9,6 +9,7 @@ use tracing::info;
 use adapters_acoustid::AcoustIdAdapter;
 use adapters_cover_art::CoverArtAdapter;
 use adapters_discord::handler::DiscordEventHandler;
+use adapters_discord::lifecycle_worker::run_lifecycle_worker;
 use adapters_lyrics::LyricsAdapter;
 use adapters_media_store::fs_store::FsStore;
 use adapters_media_store::scanner::MediaScanner;
@@ -18,10 +19,18 @@ use adapters_persistence::db::Database;
 use adapters_persistence::migrations::run_migrations;
 use adapters_persistence::repositories::album_repository::PgAlbumRepository;
 use adapters_persistence::repositories::artist_repository::PgArtistRepository;
+use adapters_persistence::repositories::playlist_repository::PgPlaylistRepository;
+use adapters_persistence::repositories::recommendation_repository::PgRecommendationRepository;
 use adapters_persistence::repositories::track_repository::PgTrackRepository;
+use adapters_persistence::repositories::user_library_repository::PgUserLibraryRepository;
+use adapters_search::TantivySearchAdapter;
 use adapters_voice::state_map::GuildStateMap;
 use application::events::{ToCoverArt, ToLyrics, ToMusicBrainz, ToTagWriter};
+use application::ports::playlist::PlaylistPort;
+use application::ports::recommendation::RecommendationPort;
 use application::ports::repository::{AlbumRepository, ArtistRepository, TrackRepository};
+use application::ports::search::TrackSearchPort;
+use application::ports::user_library::UserLibraryPort;
 use application::tag_writer_worker::run_startup_tag_poller;
 use application::{
     AcoustIdWorker, CoverArtWorker, EnrichmentOrchestrator, LyricsWorker, MusicBrainzWorker,
@@ -52,6 +61,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let artist_repo: Arc<PgArtistRepository> = Arc::new(PgArtistRepository::new(db.clone()));
     let album_repo: Arc<PgAlbumRepository> = Arc::new(PgAlbumRepository::new(db.clone()));
 
+    // ── Pass 3: User layer repositories ────────────────────────────────
+    let playlist_port: Arc<dyn PlaylistPort> = Arc::new(PgPlaylistRepository::new(db.clone()));
+    let user_library_port: Arc<dyn UserLibraryPort> =
+        Arc::new(PgUserLibraryRepository::new(db.clone()));
+    let recommendation_port: Arc<dyn RecommendationPort> =
+        Arc::new(PgRecommendationRepository::new(db.clone()));
+
     let acoustid_adapter = Arc::new(AcoustIdAdapter::new(config.acoustid_api_key.clone()));
     let mb_adapter = Arc::new(MusicBrainzAdapter::new(config.user_agent.clone()));
     let lyrics_adapter = Arc::new(LyricsAdapter::new(
@@ -71,6 +87,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let _media_store = Arc::new(FsStore::new(&config.media_root));
+
+    // ── Tantivy Search Index ───────────────────────────────────────────
+    // 1. NAS path guard
+    if config.tantivy_index_path.starts_with(&config.media_root) {
+        tracing::warn!(
+            operation = "search.startup_check",
+            path = %config.tantivy_index_path.display(),
+            "TANTIVY_INDEX_PATH is under MEDIA_ROOT — index must be on local disk, not NAS"
+        );
+    }
+
+    // 2. Open or create the index (synchronous)
+    let search_port: Arc<dyn TrackSearchPort> = Arc::new(
+        TantivySearchAdapter::open_or_create(config.tantivy_index_path.clone(), db.0.clone())
+            .expect("failed to open Tantivy search index"),
+    );
+
+    // 3. Full rebuild before workers or Discord client start
+    let t0 = std::time::Instant::now();
+    let doc_count = search_port
+        .rebuild_index()
+        .await
+        .expect("failed to build Tantivy index from PostgreSQL");
+
+    tracing::info!(
+        documents = doc_count,
+        elapsed_ms = t0.elapsed().as_millis(),
+        operation = "search.startup_rebuild_complete",
+        "Tantivy search index ready"
+    );
 
     // ── Scan Pipeline ──────────────────────────────────────────────────
     let token = CancellationToken::new();
@@ -169,6 +215,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             track_repo: Arc::clone(&track_repo) as Arc<dyn TrackRepository>,
             album_repo: Arc::clone(&album_repo) as Arc<dyn AlbumRepository>,
             artist_repo: Arc::clone(&artist_repo) as Arc<dyn ArtistRepository>,
+            search_port: Arc::clone(&search_port),
             task_semaphore: Arc::new(tokio::sync::Semaphore::new(config.tag_write_concurrency)),
         });
         let tok = token.clone();
@@ -221,24 +268,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         | GatewayIntents::GUILD_MESSAGES;
 
     let state_map: Arc<GuildStateMap> = Arc::new(dashmap::DashMap::new());
+    let songbird_instance = songbird::Songbird::serenity();
+
+    // ── Pass 3: Lifecycle Worker ───────────────────────────────────────
+    let (lifecycle_tx, lifecycle_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let handler = DiscordEventHandler {
         discord_guild_id: config.discord_guild_id,
         track_repo: Arc::clone(&track_repo),
+        search_port: Arc::clone(&search_port),
+        playlist_port: Arc::clone(&playlist_port),
+        user_library_port: Arc::clone(&user_library_port),
+        recommendation_port: Arc::clone(&recommendation_port),
         media_root: config.media_root.clone(),
         auto_leave_secs: config.auto_leave_secs,
-        songbird: songbird::Songbird::serenity(),
+        songbird: songbird_instance.clone(),
         guild_state: Arc::clone(&state_map),
+        lifecycle_tx: lifecycle_tx.clone(),
     };
 
     let token_str: Token = config.discord_token.parse().unwrap();
     let mut client = Client::builder(token_str, intents)
         .event_handler(Arc::new(handler.clone()))
-        .voice_manager(handler.songbird.clone() as Arc<dyn serenity::all::VoiceGatewayManager>)
+        .voice_manager(songbird_instance.clone() as Arc<dyn serenity::all::VoiceGatewayManager>)
         .await
         .expect("failed to create Discord client");
 
-    // (No Serenity TypeMap usages needed for V2 bot logic)
+    // Close dangling listen events from previous crashes
+    if let Err(e) = user_library_port.close_dangling_events(0).await {
+        tracing::warn!("Failed to close dangling listen events: {}", e);
+    }
+
+    {
+        let ulp = Arc::clone(&user_library_port);
+        let rp = Arc::clone(&recommendation_port);
+        let gs = Arc::clone(&state_map);
+        let sb = songbird_instance.clone();
+        let tok = token.clone();
+        let http_clone = Arc::clone(&client.http);
+        let cache_clone = Arc::clone(&client.cache);
+        let media = config.media_root.clone();
+        let als = config.auto_leave_secs;
+        let ltx = lifecycle_tx.clone();
+        tokio::spawn(async move {
+            tokio::select! {
+                biased;
+                _ = tok.cancelled() => {}
+                _ = run_lifecycle_worker(lifecycle_rx, ulp, rp, gs, sb, http_clone, cache_clone, media, als, ltx) => {}
+            }
+        });
+    }
 
     // Start the Discord client (blocks until shutdown signal)
     let shutdown_trigger = client.shard_manager.get_shutdown_trigger();

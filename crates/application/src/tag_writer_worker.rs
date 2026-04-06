@@ -8,6 +8,7 @@ use crate::AppError;
 use crate::events::ToTagWriter;
 use crate::ports::file_ops::{FileTagWriterPort, TagData};
 use crate::ports::repository::{AlbumRepository, ArtistRepository, TrackRepository};
+use crate::ports::search::TrackSearchPort;
 
 /// A1 fix: `TagWriterWorker` has NO `smb_semaphore` field.
 /// The `FileTagWriterPort` owns SMB semaphore acquisition internally.
@@ -17,6 +18,7 @@ pub struct TagWriterWorker {
     pub track_repo: Arc<dyn TrackRepository>,
     pub album_repo: Arc<dyn AlbumRepository>,
     pub artist_repo: Arc<dyn ArtistRepository>,
+    pub search_port: Arc<dyn TrackSearchPort>,
     /// C1 fix: limits concurrent tag write tasks to avoid unbounded spawning.
     /// Default: 2 (D2 fix: each task loads the full file into memory).
     pub task_semaphore: Arc<Semaphore>,
@@ -65,38 +67,20 @@ impl TagWriterWorker {
             None => None,
         };
 
-        let track_artists = self.artist_repo.find_by_track_id(msg.track_id).await?;
-        let composers: Vec<_> = track_artists
-            .iter()
-            .filter(|(ta, _)| ta.role == domain::ArtistRole::Composer)
-            .map(|(_, a)| a.name.clone())
-            .collect();
-        let lyricists: Vec<_> = track_artists
-            .iter()
-            .filter(|(ta, _)| ta.role == domain::ArtistRole::Lyricist)
-            .map(|(_, a)| a.name.clone())
-            .collect();
+        let credits = self.track_repo.get_credits(msg.track_id).await?;
 
         let tags = TagData {
             title: track.title.clone(),
             artist: track.artist_display.clone().unwrap_or_default(),
             album_title: album.as_ref().map(|a| a.title.clone()),
             year: track.year,
-            genres: track.genres.clone().unwrap_or_default(),
+            genres: track.genres.unwrap_or_default(),
             track_number: track.track_number,
             disc_number: track.disc_number,
             bpm: track.bpm,
             isrc: track.isrc.clone(),
-            composer: if composers.is_empty() {
-                None
-            } else {
-                Some(composers.join(", "))
-            },
-            lyricist: if lyricists.is_empty() {
-                None
-            } else {
-                Some(lyricists.join(", "))
-            },
+            composers: credits.composers,
+            lyricists: credits.lyricists,
             lyrics: track.lyrics.clone(),
         };
 
@@ -117,6 +101,18 @@ impl TagWriterWorker {
             correlation_id = %msg.correlation_id,
             "tag_writer: completed writeback"
         );
+
+        // Non-fatal: a failed reindex is caught on the next startup rebuild.
+        // Do not fail the enrichment pipeline or mark the track as failed.
+        if let Err(e) = self.search_port.reindex_track(msg.track_id).await {
+            warn!(
+                track_id   = %msg.track_id,
+                error      = %e,
+                error.kind = %e.kind_str(),
+                operation  = "search.reindex_track_failed",
+                "Tantivy reindex failed after enrichment — will reconcile at next startup"
+            );
+        }
 
         Ok(())
     }

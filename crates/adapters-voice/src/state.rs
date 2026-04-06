@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::time::Instant;
 
 use serenity::model::id::{ChannelId, MessageId};
 use tokio_util::sync::CancellationToken;
@@ -38,9 +39,9 @@ impl From<TrackSummary> for QueuedTrack {
             track_id: s.id,
             title: s.title,
             artist: s.artist_display.unwrap_or_default(),
-            album: None,
+            album: s.album_title,
             duration_ms: s.duration_ms,
-            blob_location: s.blob_location,
+            blob_location: s.blob_location.unwrap_or_default(),
         }
     }
 }
@@ -64,6 +65,17 @@ pub struct GuildMusicState {
 
     // Auto-leave: cancelled when a new track is queued
     pub auto_leave_token: Option<CancellationToken>,
+
+    // ── Pass 3: Radio mode ────────────────────────────────────────
+    /// Whether radio mode is active for this guild.
+    pub radio_mode: bool,
+    /// The user who started radio mode (for recommendation seeding).
+    pub radio_user_id: Option<String>,
+
+    // ── Pass 3: Listen event tracking ─────────────────────────────
+    /// When the current (front) track started playing.
+    /// Used to compute play_duration_ms on track end.
+    pub track_started_at: Option<Instant>,
 }
 
 impl Default for GuildMusicState {
@@ -80,6 +92,9 @@ impl GuildMusicState {
             text_channel_id: None,
             now_playing_msg: None,
             auto_leave_token: None,
+            radio_mode: false,
+            radio_user_id: None,
+            track_started_at: None,
         }
     }
 

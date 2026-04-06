@@ -8,7 +8,7 @@ use adapters_voice::state_map::GuildStateMap;
 pub fn register() -> CreateCommand<'static> {
     CreateCommand::new("leave")
         .description("Disconnect the bot from the voice channel")
-        .default_member_permissions(Permissions::ADMINISTRATOR)
+        .default_member_permissions(Permissions::SEND_MESSAGES)
 }
 
 pub async fn run(

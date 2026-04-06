@@ -1,11 +1,13 @@
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 
 use serenity::model::id::{ChannelId, GuildId};
 use songbird::input::File as SongbirdFile;
 use songbird::tracks::TrackHandle;
 use songbird::{Event, TrackEvent};
 
+use crate::lifecycle::TrackLifecycleTx;
 use crate::state::QueuedTrack;
 use crate::state_map::GuildStateMap;
 use crate::track_event_handler::TrackEventHandler;
@@ -72,8 +74,10 @@ pub async fn enqueue_track(
     track: &QueuedTrack,
     media_root: &Path,
     http: &Arc<serenity::all::Http>,
+    cache: &Arc<serenity::all::Cache>,
     auto_leave_secs: u64,
     state_map: &Arc<GuildStateMap>,
+    lifecycle_tx: TrackLifecycleTx,
 ) -> Result<TrackHandle, AppError> {
     let handler_lock = songbird.get(guild_id).ok_or_else(|| AppError::Voice {
         kind: VoiceErrorKind::NotInChannel,
@@ -90,21 +94,61 @@ pub async fn enqueue_track(
 
     let source = SongbirdFile::new(abs_path);
 
-    // enqueue_input adds to Songbird's TrackQueue and auto-plays when the
-    // queue is empty.
     let handle = {
         let mut handler = handler_lock.lock().await;
         handler.enqueue_input(source.into()).await
     };
+
+    // Record track start time in guild state and emit TrackStarted for the first track
+    let mut emit_start = false;
+    let mut users_in_channel = Vec::new();
+    if let Some(state_entry) = state_map.get(&guild_id) {
+        let mut state = state_entry.lock().await;
+        // Only set if this is the first/only track (i.e. it starts playing immediately)
+        if state.meta_queue.len() <= 1 {
+            state.track_started_at = Some(Instant::now());
+            emit_start = true;
+            if let Some(channel_id) = state.voice_channel_id {
+                let cache_clone = Arc::clone(cache);
+                users_in_channel = cache_clone
+                    .guild(guild_id)
+                    .map(|g| {
+                        g.voice_states
+                            .iter()
+                            .filter(|vs| vs.channel_id == Some(channel_id))
+                            .filter(|vs| {
+                                !g.members
+                                    .get(&vs.user_id)
+                                    .map(|m| m.user.bot())
+                                    .unwrap_or(false)
+                            })
+                            .map(|vs| vs.user_id.to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+            }
+        }
+    }
+
+    if emit_start {
+        let _ = lifecycle_tx.send(crate::lifecycle::TrackLifecycleEvent::TrackStarted {
+            guild_id,
+            track_id: track.track_id,
+            track_duration_ms: track.duration_ms,
+            users_in_channel,
+        });
+    }
 
     // Attach our metadata/side-effect handler to both End and Error events.
     // This keeps audio advancement with Songbird while we handle embeds + auto-leave.
     let event_handler = TrackEventHandler {
         guild_id,
         http: Arc::clone(http),
+        cache: Arc::clone(cache),
         auto_leave_secs,
         songbird: Arc::clone(songbird),
         state_map: Arc::clone(state_map),
+        lifecycle_tx: lifecycle_tx.clone(),
     };
 
     handle

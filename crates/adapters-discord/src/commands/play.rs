@@ -10,12 +10,15 @@ use serenity::model::id::ChannelId;
 use uuid::Uuid;
 
 use adapters_persistence::repositories::track_repository::PgTrackRepository;
+use adapters_voice::lifecycle::TrackLifecycleTx;
 use adapters_voice::player::{enqueue_track, join_channel};
 use adapters_voice::state::QueuedTrack;
 use adapters_voice::state_map::GuildStateMap;
 use adapters_voice::track_event_handler::post_now_playing;
+use application::ports::recommendation::RecommendationPort;
 use application::ports::repository::TrackRepository;
 use application::ports::search::TrackSearchPort;
+use application::ports::user_library::UserLibraryPort;
 
 fn extract_query(cmd: &CommandInteraction) -> Option<&str> {
     for option in &cmd.data.options() {
@@ -41,7 +44,9 @@ pub fn register() -> CreateCommand<'static> {
 pub async fn autocomplete(
     http: &serenity::all::Http,
     interaction: &CommandInteraction,
-    track_repo: &Arc<PgTrackRepository>,
+    search_port: &Arc<dyn TrackSearchPort>,
+    user_library_port: &Arc<dyn UserLibraryPort>,
+    recommendation_port: &Arc<dyn RecommendationPort>,
 ) {
     let mut query = "";
     for option in &interaction.data.options {
@@ -52,40 +57,127 @@ pub async fn autocomplete(
         }
     }
 
-    match track_repo.search(query, 25).await {
-        Ok(results) => {
-            let choices: Vec<_> = results
-                .into_iter()
-                .map(|r| {
-                    let raw = if let Some(artist) = &r.artist_display {
-                        format!("{} — {}", r.title, artist)
-                    } else {
-                        r.title.clone()
-                    };
-                    let display = if raw.len() > 100 {
-                        // Unicode-safe truncation: floor_char_boundary finds
-                        // the largest char-aligned byte index <= 97.
-                        let end = raw.floor_char_boundary(97);
-                        format!("{}...", &raw[..end])
-                    } else {
-                        raw
-                    };
-                    serenity::builder::AutocompleteChoice::new(display, r.id.to_string())
+    if query.is_empty() {
+        // Empty query: mix recent history + favourites + recommendations
+        let user_id = interaction.user.id.to_string();
+        let mut choices: Vec<serenity::builder::AutocompleteChoice<'_>> = Vec::with_capacity(25);
+
+        // 1. Last 8 distinct tracks from listen history
+        if let Ok(recent) = user_library_port.recent_history(&user_id, 8).await {
+            for r in &recent {
+                if choices.len() >= 25 {
+                    break;
+                }
+                let display = format_track_display(r);
+                choices.push(serenity::builder::AutocompleteChoice::new(
+                    format!("🕐 {display}"),
+                    r.id.to_string(),
+                ));
+            }
+        }
+
+        // 2. Up to 8 favourites not already in choices
+        if choices.len() < 25 {
+            let existing_ids: Vec<Uuid> = choices
+                .iter()
+                .filter_map(|c| match &c.value {
+                    serenity::builder::AutocompleteValue::String(s) => Uuid::parse_str(s).ok(),
+                    _ => None,
                 })
                 .collect();
 
-            let _ = interaction
-                .create_response(
-                    http,
-                    serenity::builder::CreateInteractionResponse::Autocomplete(
-                        CreateAutocompleteResponse::new().set_choices(choices),
-                    ),
-                )
-                .await;
+            if let Ok(favs) = user_library_port.list_favourites(&user_id, 0, 8).await {
+                for f in &favs.tracks {
+                    if choices.len() >= 25 {
+                        break;
+                    }
+                    if existing_ids.contains(&f.id) {
+                        continue;
+                    }
+                    let display = format_track_display(f);
+                    choices.push(serenity::builder::AutocompleteChoice::new(
+                        format!("❤️ {display}"),
+                        f.id.to_string(),
+                    ));
+                }
+            }
         }
-        Err(e) => {
-            tracing::warn!(error = %e, "Autocomplete search failed");
+
+        // 3. Fill remaining with recommendations
+        if choices.len() < 25 {
+            let exclude_ids: Vec<Uuid> = choices
+                .iter()
+                .filter_map(|c| match &c.value {
+                    serenity::builder::AutocompleteValue::String(s) => Uuid::parse_str(s).ok(),
+                    _ => None,
+                })
+                .collect();
+            let remaining = 25 - choices.len();
+
+            if let Ok(recs) = recommendation_port
+                .recommend(&user_id, None, &exclude_ids, remaining)
+                .await
+            {
+                for r in &recs {
+                    if choices.len() >= 25 {
+                        break;
+                    }
+                    let display = format_track_display(r);
+                    choices.push(serenity::builder::AutocompleteChoice::new(
+                        format!("✨ {display}"),
+                        r.id.to_string(),
+                    ));
+                }
+            }
         }
+
+        let _ = interaction
+            .create_response(
+                http,
+                serenity::builder::CreateInteractionResponse::Autocomplete(
+                    CreateAutocompleteResponse::new().set_choices(choices),
+                ),
+            )
+            .await;
+    } else {
+        // Normal search autocomplete
+        match search_port.autocomplete(query, 25).await {
+            Ok(results) => {
+                let choices: Vec<_> = results
+                    .into_iter()
+                    .map(|r| {
+                        let display = format_track_display(&r);
+                        serenity::builder::AutocompleteChoice::new(display, r.id.to_string())
+                    })
+                    .collect();
+
+                let _ = interaction
+                    .create_response(
+                        http,
+                        serenity::builder::CreateInteractionResponse::Autocomplete(
+                            CreateAutocompleteResponse::new().set_choices(choices),
+                        ),
+                    )
+                    .await;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Autocomplete search failed");
+            }
+        }
+    }
+}
+
+fn format_track_display(r: &domain::track::TrackSummary) -> String {
+    let raw = if let Some(artist) = &r.artist_display {
+        format!("{} — {}", r.title, artist)
+    } else {
+        r.title.clone()
+    };
+    if raw.len() > 100 {
+        let end = raw.floor_char_boundary(97);
+        format!("{}...", &raw[..end])
+    } else {
+        raw
     }
 }
 
@@ -99,6 +191,9 @@ pub async fn run(
     auto_leave_secs: u64,
     songbird: &Arc<songbird::Songbird>,
     guild_state_map: &Arc<GuildStateMap>,
+    lifecycle_tx: &TrackLifecycleTx,
+    _user_library_port: &Arc<dyn UserLibraryPort>,
+    _recommendation_port: &Arc<dyn RecommendationPort>,
 ) {
     let _ = interaction.defer_ephemeral(http).await;
 
@@ -186,14 +281,10 @@ pub async fn run(
     let queued = QueuedTrack::from(&track);
 
     // ── 4. Handle channel move ─────────────────────────────────────────────
-    // If the bot is already in a *different* channel, clear our meta_queue
-    // and stop Songbird's queue before moving. Songbird's Driver is reset on
-    // rejoin, so the old TrackQueue is lost regardless.
     {
-        let existing_channel = guild_state_map.get(&guild_id).and_then(|s| {
-            // Don't block — try_lock to avoid deadlock with other commands
-            s.try_lock().ok().and_then(|state| state.voice_channel_id)
-        });
+        let existing_channel = guild_state_map
+            .get(&guild_id)
+            .and_then(|s| s.try_lock().ok().and_then(|state| state.voice_channel_id));
 
         if let Some(existing) = existing_channel
             && existing != channel_id
@@ -205,11 +296,9 @@ pub async fn run(
                 operation      = "play.channel_move",
                 "channel move detected — clearing queue before rejoin"
             );
-            // Stop Songbird's queue (it will be destroyed on rejoin anyway)
             if let Some(handler_lock) = songbird.get(guild_id) {
                 handler_lock.lock().await.queue().stop();
             }
-            // Clear our metadata mirror
             if let Some(state_lock) = guild_state_map.get(&guild_id) {
                 let mut state = state_lock.lock().await;
                 state.meta_queue.clear();
@@ -218,7 +307,7 @@ pub async fn run(
         }
     }
 
-    // ── 5. Join the voice channel (no-op if already in the same channel) ───
+    // ── 5. Join the voice channel ──────────────────────────────────────────
     if let Err(e) = join_channel(songbird, guild_id, channel_id).await {
         tracing::error!(
             guild_id   = %guild_id,
@@ -251,20 +340,20 @@ pub async fn run(
         state.voice_channel_id = Some(channel_id);
         state.text_channel_id = Some(ChannelId::new(interaction.channel_id.get()));
         state.cancel_auto_leave();
-        // Push metadata to our parallel queue *before* enqueue_track so the
-        // count is accurate when TrackEventHandler fires.
         state.meta_queue.push_back(queued.clone());
     }
 
-    // ── 7. Enqueue into Songbird's builtin queue ───────────────────────────
+    // ── 9. Enqueue into Songbird ───────────────────────────────────────────
     match enqueue_track(
         songbird,
         guild_id,
         &queued,
         media_root,
         http,
+        cache,
         auto_leave_secs,
         guild_state_map,
+        lifecycle_tx.clone(),
     )
     .await
     {
@@ -274,7 +363,6 @@ pub async fn run(
                 state.meta_queue.len()
             };
             let msg = if queue_pos == 1 {
-                // Post the "Now Playing" embed for the first track
                 let text_channel = ChannelId::new(interaction.channel_id.get());
                 post_now_playing(
                     http,
@@ -282,7 +370,7 @@ pub async fn run(
                     guild_id,
                     &state_lock,
                     Some(&queued),
-                    None, // no existing message to edit
+                    None,
                 )
                 .await;
                 format!("▶ Now playing **{}**", queued.title)
@@ -297,7 +385,6 @@ pub async fn run(
                 .await;
         }
         Err(e) => {
-            // Roll back the metadata push on failure
             {
                 let mut state = state_lock.lock().await;
                 state.meta_queue.pop_back();

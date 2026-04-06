@@ -1,14 +1,15 @@
 use crate::AppError;
 use async_trait::async_trait;
 use domain::track::TrackSummary;
+use uuid::Uuid;
 
 #[async_trait]
 pub trait TrackSearchPort: Send + Sync {
-    /// Hybrid FTS + trigram search. Only returns tracks with
-    /// `enrichment_status` = 'done'.
-    async fn search(&self, query: &str, limit: i64) -> Result<Vec<TrackSummary>, AppError>;
+    async fn autocomplete(&self, query: &str, limit: usize) -> Result<Vec<TrackSummary>, AppError>;
 
-    /// Autocomplete: prefix match on `title` and `artist_display`.
-    /// Only returns tracks with `enrichment_status` = 'done'.
-    async fn autocomplete(&self, prefix: &str, limit: i64) -> Result<Vec<TrackSummary>, AppError>;
+    /// Full index rebuild from PostgreSQL source of truth.
+    async fn rebuild_index(&self) -> Result<usize, AppError>;
+
+    /// Reindex a single track by UUID after enrichment completes.
+    async fn reindex_track(&self, track_id: Uuid) -> Result<(), AppError>;
 }

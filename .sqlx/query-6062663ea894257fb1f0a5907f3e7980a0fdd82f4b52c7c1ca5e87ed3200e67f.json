@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, title, artist_display, album_id, duration_ms, blob_location\n            FROM tracks\n            WHERE\n                search_vector @@ websearch_to_tsquery('music_simple', $1)\n                OR search_text ILIKE '%' || $2 || '%'\n            ORDER BY\n                ts_rank(search_vector, websearch_to_tsquery('music_simple', $1)) DESC,\n                similarity(search_text, $2) DESC\n            LIMIT $3\n            ",
+  "query": "SELECT DISTINCT ON (t.id) t.id, t.title, t.artist_display,\n                    al.title AS album_title, t.album_id, t.duration_ms, t.blob_location\n             FROM listen_events le\n             JOIN tracks t ON t.id = le.track_id\n             LEFT JOIN albums al ON al.id = t.album_id\n             WHERE le.user_id = $1\n             ORDER BY t.id, le.started_at DESC\n             LIMIT $2",
   "describe": {
     "columns": [
       {
@@ -20,23 +20,27 @@
       },
       {
         "ordinal": 3,
+        "name": "album_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
         "name": "album_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "duration_ms",
         "type_info": "Int4"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "blob_location",
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
         "Text",
         "Int8"
       ]
@@ -45,10 +49,11 @@
       false,
       false,
       true,
+      false,
       true,
       true,
       false
     ]
   },
-  "hash": "cb0a07dcf98e560423b08a9021fc38f72e9b4666804ac588ce2d47574f2ee5b8"
+  "hash": "6062663ea894257fb1f0a5907f3e7980a0fdd82f4b52c7c1ca5e87ed3200e67f"
 }

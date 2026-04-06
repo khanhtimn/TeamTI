@@ -15,6 +15,7 @@ adapters-acoustid = { path = "../../crates/adapters-acoustid" }
 adapters-musicbrainz = { path = "../../crates/adapters-musicbrainz" }
 adapters-cover-art = { path = "../../crates/adapters-cover-art" }
 adapters-lyrics = { path = "../../crates/adapters-lyrics" }
+adapters-search = { path = "../../crates/adapters-search" }
 shared-config = { path = "../../crates/shared-config" }
 shared-observability = { path = "../../crates/shared-observability" }
 dashmap = { workspace = true, features = ["inline"] }

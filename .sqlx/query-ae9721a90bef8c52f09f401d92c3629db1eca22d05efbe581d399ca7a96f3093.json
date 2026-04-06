@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ar.name, ta.role as \"role: domain::ArtistRole\", ta.position\n            FROM track_artists ta\n            JOIN artists ar ON ar.id = ta.artist_id\n            WHERE ta.track_id = $1\n              AND ta.role IN ('composer', 'lyricist')\n            ORDER BY ta.role, ta.position ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "role: domain::ArtistRole",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "position",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ae9721a90bef8c52f09f401d92c3629db1eca22d05efbe581d399ca7a96f3093"
+}

@@ -15,8 +15,21 @@ pub mod services;
 pub use acoustid_worker::AcoustIdWorker;
 pub use cover_art_worker::CoverArtWorker;
 pub use enrichment_orchestrator::EnrichmentOrchestrator;
-pub use error::AppError;
+pub use error::{AppError, PlaylistErrorKind, SearchErrorKind};
 pub use events::{AcoustIdRequest, ToLyrics, TrackScanned};
 pub use lyrics_worker::LyricsWorker;
 pub use musicbrainz_worker::MusicBrainzWorker;
 pub use tag_writer_worker::TagWriterWorker;
+
+/// A listen event is "completed" when the user listened to at least
+/// this fraction of the track duration.
+pub const LISTEN_COMPLETION_THRESHOLD: f32 = 0.80;
+
+/// Number of tracks remaining in the queue at which radio mode triggers a refill.
+pub const RADIO_REFILL_THRESHOLD: usize = 2;
+
+/// Number of tracks added per radio refill batch.
+pub const RADIO_BATCH_SIZE: usize = 5;
+
+/// Maximum number of collaborators per playlist.
+pub const PLAYLIST_COLLABORATOR_LIMIT: usize = 10;

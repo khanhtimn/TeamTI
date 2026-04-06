@@ -99,6 +99,16 @@ pub trait TrackRepository: Send + Sync {
 
     /// Update lyrics for a track.
     async fn update_lyrics(&self, track_id: Uuid, lyrics: &str) -> Result<(), AppError>;
+
+    /// Fetch all track credits (composers and lyricists) in a single query.
+    async fn get_credits(&self, track_id: Uuid) -> Result<TrackCredits, AppError>;
+}
+
+/// Consolidated track credits.
+#[derive(Debug, Clone)]
+pub struct TrackCredits {
+    pub composers: Vec<String>,
+    pub lyricists: Vec<String>,
 }
 
 #[async_trait]

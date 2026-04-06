@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, title, artist_display, album_id, duration_ms, blob_location\n            FROM tracks\n            WHERE search_text LIKE $1\n            ORDER BY title ASC\n            LIMIT $2\n            ",
+  "query": "SELECT t.id, t.title, t.artist_display, a.title AS album_title,\n                    t.album_id, t.duration_ms, t.blob_location\n             FROM playlist_items pi\n             JOIN tracks t ON t.id = pi.track_id\n             LEFT JOIN albums a ON a.id = t.album_id\n             WHERE pi.playlist_id = $1\n             ORDER BY pi.position ASC, pi.added_at ASC",
   "describe": {
     "columns": [
       {
@@ -20,34 +20,39 @@
       },
       {
         "ordinal": 3,
+        "name": "album_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
         "name": "album_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "duration_ms",
         "type_info": "Int4"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "blob_location",
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
       false,
       false,
       true,
+      false,
       true,
       true,
       false
     ]
   },
-  "hash": "35b517d05a064281d95f7c2ccf59a8600fa4cef22060e8c5cbe40cb030cead01"
+  "hash": "5f506f8143c4bc5432252647e2ae82187274b511c81a829db63452f970beebb5"
 }

@@ -9,7 +9,7 @@ use adapters_voice::track_event_handler::post_now_playing;
 pub fn register() -> CreateCommand<'static> {
     CreateCommand::new("clear")
         .description("Clear the current music queue")
-        .default_member_permissions(Permissions::ADMINISTRATOR)
+        .default_member_permissions(Permissions::SEND_MESSAGES)
 }
 
 pub async fn run(

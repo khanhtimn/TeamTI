@@ -81,6 +81,17 @@ pub struct Config {
     /// Whether to fetch composer/lyricist from MusicBrainz Work entities.
     /// Doubles MB API calls per enrichment (~0.5 tracks/sec). Default: true.
     pub mb_fetch_work_credits: bool,
+
+    /// Absolute path to the Tantivy index directory.
+    ///
+    /// MUST be on local disk. Do NOT point this at the NAS SMB mount.
+    /// Memory-mapped files over a network filesystem cause undefined behavior
+    /// on network interruption. The index is fully reconstructable from
+    /// PostgreSQL in ~2 seconds.
+    ///
+    /// Env var: TANTIVY_INDEX_PATH
+    /// Default: "./search_index"
+    pub tantivy_index_path: PathBuf,
 }
 
 impl Config {
@@ -120,6 +131,8 @@ impl Config {
             auto_leave_secs: parse_env("AUTO_LEAVE_SECS", 30u64)?,
             mb_fetch_work_credits: std::env::var("MB_FETCH_WORK_CREDITS")
                 .map_or(true, |v| v != "0" && v.to_lowercase() != "false"),
+            tantivy_index_path: std::env::var("TANTIVY_INDEX_PATH")
+                .map_or_else(|_| PathBuf::from("./search_index"), PathBuf::from),
         })
     }
 

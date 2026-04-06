@@ -1,0 +1,21 @@
+[package]
+name    = "adapters-search"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+application   = { path = "../application" }
+domain        = { path = "../domain" }
+shared-config = { path = "../shared-config" }
+
+tantivy     = { workspace = true, features = ["mmap", "zstd-compression", "sstable", "compare_hash_only"] }
+tokio       = { workspace = true, features = ["rt", "sync"] }
+sqlx        = { workspace = true, features = ["postgres", "uuid"] }
+uuid        = { workspace = true, features = ["v4"] }
+tracing     = { workspace = true }
+thiserror   = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO playlist_collaborators (playlist_id, user_id, added_by)\n             VALUES ($1, $2, $3)\n             ON CONFLICT (playlist_id, user_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07475fc0eda699e8322dceac7db6f019e7a2edee60d609fc781caf2ae5ba4cd8"
+}

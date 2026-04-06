@@ -67,21 +67,10 @@ CREATE TABLE IF NOT EXISTS tracks (
     enriched_at             TIMESTAMPTZ,
 
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 
-    search_text TEXT GENERATED ALWAYS AS (
-        lower(immutable_unaccent(
-            normalize(coalesce(title, ''), NFC) || ' ' ||
-            normalize(coalesce(artist_display, ''), NFC)
-        ))
-    ) STORED,
-
-    search_vector tsvector GENERATED ALWAYS AS (
-        to_tsvector('music_simple',
-            normalize(coalesce(title, ''), NFC) || ' ' ||
-            normalize(coalesce(artist_display, ''), NFC)
-        )
-    ) STORED
+    -- search_text and search_vector generated columns removed in v3.
+    -- Full-text search is handled by adapters-search (Tantivy).
 );
 
 CREATE TABLE IF NOT EXISTS track_artists (

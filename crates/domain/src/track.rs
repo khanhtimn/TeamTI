@@ -47,19 +47,18 @@ pub struct Track {
     /// Pass 4: records when enriched tags were written back to the audio file.
     /// NULL = not yet written (or re-enriched since last write).
     pub tags_written_at: Option<DateTime<Utc>>,
-    // NOTE: search_text and search_vector are generated columns.
-    // They are NOT included in INSERT/UPDATE statements.
-    // They are read-only and excluded from the Track struct by default.
-    // Use TrackSummary for queries that need them.
+    // NOTE (v3): search_text and search_vector generated columns removed.
+    // Full-text search is handled by adapters-search (Tantivy).
 }
 
 /// Lightweight projection used by search queries.
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TrackSummary {
     pub id: Uuid,
     pub title: String,
     pub artist_display: Option<String>,
+    pub album_title: Option<String>,
     pub album_id: Option<Uuid>,
     pub duration_ms: Option<i32>,
-    pub blob_location: String,
+    pub blob_location: Option<String>,
 }

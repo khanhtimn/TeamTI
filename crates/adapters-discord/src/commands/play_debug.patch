@@ -1,0 +1,21 @@
+--- crates/adapters-discord/src/commands/play.rs
++++ crates/adapters-discord/src/commands/play.rs
+@@ -233,6 +233,26 @@
+     };
+ 
+     // ── 2. Resolve the invoking user's voice channel from the cache ────────
++    tracing::debug!("Resolving voice channel for user {} in guild {}", interaction.user.id, guild_id);
++    if let Some(g) = cache.guild(guild_id) {
++        tracing::debug!("Guild {} found in cache, voice_states count: {}", guild_id, g.voice_states.len());
++        if let Some(vs) = g.voice_states.get(&interaction.user.id) {
++            tracing::debug!("VoiceState for user {} found, channel_id: {:?}", interaction.user.id, vs.channel_id);
++        } else {
++            tracing::debug!("VoiceState for user {} NOT found. Available keys: {:?}", interaction.user.id, g.voice_states.keys().collect::<Vec<_>>());
++        }
++    } else {
++        tracing::debug!("Guild {} NOT found in cache", guild_id);
++    }
++
+     let user_voice_channel = cache.guild(guild_id).and_then(|g| {
+         g.voice_states
+             .get(&interaction.user.id)

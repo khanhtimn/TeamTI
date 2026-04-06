@@ -7,15 +7,25 @@ use serenity::model::event::FullEvent;
 use serenity::prelude::{Context, EventHandler};
 
 use adapters_persistence::repositories::track_repository::PgTrackRepository;
+use adapters_voice::lifecycle::TrackLifecycleTx;
+use application::ports::playlist::PlaylistPort;
+use application::ports::recommendation::RecommendationPort;
+use application::ports::search::TrackSearchPort;
+use application::ports::user_library::UserLibraryPort;
 
 #[derive(Clone)]
 pub struct DiscordEventHandler {
     pub discord_guild_id: u64,
     pub track_repo: Arc<PgTrackRepository>,
+    pub search_port: Arc<dyn TrackSearchPort>,
+    pub playlist_port: Arc<dyn PlaylistPort>,
+    pub user_library_port: Arc<dyn UserLibraryPort>,
+    pub recommendation_port: Arc<dyn RecommendationPort>,
     pub media_root: PathBuf,
     pub auto_leave_secs: u64,
     pub songbird: Arc<songbird::Songbird>,
     pub guild_state: Arc<adapters_voice::state_map::GuildStateMap>,
+    pub lifecycle_tx: TrackLifecycleTx,
 }
 
 #[async_trait]
@@ -23,7 +33,9 @@ impl EventHandler for DiscordEventHandler {
     async fn dispatch(&self, ctx: &Context, event: &FullEvent) {
         match event {
             FullEvent::Ready { data_about_bot, .. } => {
-                use crate::commands::{clear, leave, play, rescan};
+                use crate::commands::{
+                    clear, favourite, history, leave, play, playlist, radio, rescan,
+                };
 
                 tracing::info!(
                     username   = %data_about_bot.user.name,
@@ -37,6 +49,10 @@ impl EventHandler for DiscordEventHandler {
                     clear::register(),
                     leave::register(),
                     rescan::register(),
+                    playlist::register(),
+                    favourite::register(),
+                    radio::register(),
+                    history::register(),
                 ];
 
                 // Clear all old global commands to prevent duplication
@@ -87,6 +103,9 @@ impl EventHandler for DiscordEventHandler {
                                     self.auto_leave_secs,
                                     &self.songbird,
                                     &self.guild_state,
+                                    &self.lifecycle_tx,
+                                    &self.user_library_port,
+                                    &self.recommendation_port,
                                 )
                                 .await
                             }
@@ -108,7 +127,61 @@ impl EventHandler for DiscordEventHandler {
                                 )
                                 .await
                             }
-                            "rescan" => crate::commands::rescan::run(&ctx.http, cmd).await,
+                            "rescan" => {
+                                crate::commands::rescan::run(&ctx.http, cmd, &self.search_port)
+                                    .await
+                            }
+                            "playlist" => {
+                                let subcmd = cmd.data.options.first().map(|o| o.name.as_str());
+                                if subcmd == Some("play") {
+                                    crate::commands::playlist::run_play(
+                                        &ctx.http,
+                                        &ctx.cache,
+                                        cmd,
+                                        &self.playlist_port,
+                                        &self.media_root,
+                                        self.auto_leave_secs,
+                                        &self.songbird,
+                                        &self.guild_state,
+                                        &self.lifecycle_tx,
+                                    )
+                                    .await;
+                                } else {
+                                    crate::commands::playlist::run(
+                                        &ctx.http,
+                                        cmd,
+                                        &self.playlist_port,
+                                        &self.search_port,
+                                    )
+                                    .await
+                                }
+                            }
+                            "favourite" => {
+                                crate::commands::favourite::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.user_library_port,
+                                    &self.guild_state,
+                                )
+                                .await
+                            }
+                            "radio" => {
+                                crate::commands::radio::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.guild_state,
+                                    &self.lifecycle_tx,
+                                )
+                                .await
+                            }
+                            "history" => {
+                                crate::commands::history::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.user_library_port,
+                                )
+                                .await
+                            }
                             unknown => tracing::warn!(
                                 command = unknown,
                                 operation = "discord.unknown_command",
@@ -117,11 +190,194 @@ impl EventHandler for DiscordEventHandler {
                         }
                     }
 
-                    Interaction::Autocomplete(ac) if ac.data.name == "play" => {
-                        crate::commands::play::autocomplete(&ctx.http, ac, &self.track_repo).await;
+                    Interaction::Autocomplete(ac) => match ac.data.name.as_str() {
+                        "play" => {
+                            crate::commands::play::autocomplete(
+                                &ctx.http,
+                                ac,
+                                &self.search_port,
+                                &self.user_library_port,
+                                &self.recommendation_port,
+                            )
+                            .await;
+                        }
+                        "playlist" => {
+                            crate::commands::playlist::autocomplete(
+                                &ctx.http,
+                                ac,
+                                &self.playlist_port,
+                                &self.search_port,
+                            )
+                            .await;
+                        }
+                        "favourite" => {
+                            crate::commands::favourite::autocomplete(
+                                &ctx.http,
+                                ac,
+                                &self.search_port,
+                            )
+                            .await;
+                        }
+                        _ => {}
+                    },
+
+                    Interaction::Component(component) => {
+                        self.handle_component_interaction(ctx, component).await;
                     }
 
                     _ => {}
+                }
+            }
+
+            _ => {}
+        }
+    }
+}
+
+impl DiscordEventHandler {
+    async fn handle_component_interaction(
+        &self,
+        ctx: &Context,
+        interaction: &serenity::model::application::ComponentInteraction,
+    ) {
+        use crate::commands::pagination;
+
+        let custom_id = &interaction.data.custom_id;
+
+        // Skip page indicator buttons (they're disabled and shouldn't fire)
+        if custom_id.contains("page_indicator") {
+            return;
+        }
+
+        let Some((view_type, resource_id, page, session_user_id)) =
+            pagination::parse_custom_id(custom_id)
+        else {
+            return;
+        };
+
+        // Check session ownership
+        if !pagination::is_session_owner(interaction, &session_user_id) {
+            pagination::send_not_yours(&ctx.http, interaction).await;
+            return;
+        }
+
+        match view_type.as_str() {
+            "playlist_page" => {
+                let Some(playlist_id) = pagination::parse_resource_uuid(&resource_id) else {
+                    return;
+                };
+
+                match self
+                    .playlist_port
+                    .get_playlist_items(playlist_id, &session_user_id, page, pagination::PAGE_SIZE)
+                    .await
+                {
+                    Ok(page_data) => {
+                        let pages = pagination::total_pages(page_data.total, pagination::PAGE_SIZE);
+                        let embed = crate::commands::playlist::build_playlist_embed(
+                            &page_data.items,
+                            playlist_id,
+                            page,
+                            pages,
+                            page_data.total,
+                        );
+                        let buttons = pagination::build_nav_buttons(
+                            "playlist_page",
+                            &resource_id,
+                            page,
+                            pages,
+                            &session_user_id,
+                        );
+
+                        let resp = serenity::builder::CreateInteractionResponse::UpdateMessage(
+                            serenity::builder::CreateInteractionResponseMessage::new()
+                                .embed(embed)
+                                .components(vec![buttons]),
+                        );
+                        let _ = interaction.create_response(&ctx.http, resp).await;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "pagination: failed to fetch playlist page");
+                    }
+                }
+            }
+
+            "fav_page" => {
+                match self
+                    .user_library_port
+                    .list_favourites(&session_user_id, page, pagination::PAGE_SIZE)
+                    .await
+                {
+                    Ok(page_data) => {
+                        let pages = pagination::total_pages(page_data.total, pagination::PAGE_SIZE);
+                        let embed = crate::commands::favourite::build_favourites_embed(
+                            &page_data.tracks,
+                            page,
+                            pages,
+                            page_data.total,
+                        );
+                        let buttons = pagination::build_nav_buttons(
+                            "fav_page",
+                            &resource_id,
+                            page,
+                            pages,
+                            &session_user_id,
+                        );
+
+                        let resp = serenity::builder::CreateInteractionResponse::UpdateMessage(
+                            serenity::builder::CreateInteractionResponseMessage::new()
+                                .embed(embed)
+                                .components(vec![buttons]),
+                        );
+                        let _ = interaction.create_response(&ctx.http, resp).await;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "pagination: failed to fetch favourites page");
+                    }
+                }
+            }
+
+            "history_page" => {
+                match self
+                    .user_library_port
+                    .recent_history(&session_user_id, 50)
+                    .await
+                {
+                    Ok(all_tracks) => {
+                        let total = all_tracks.len() as i64;
+                        let pages = pagination::total_pages(total, pagination::PAGE_SIZE);
+                        let start = (page * pagination::PAGE_SIZE) as usize;
+                        let end = ((page + 1) * pagination::PAGE_SIZE) as usize;
+                        let page_tracks: Vec<_> = all_tracks
+                            .into_iter()
+                            .skip(start)
+                            .take(end - start)
+                            .collect();
+
+                        let embed = crate::commands::history::build_history_embed(
+                            &page_tracks,
+                            page,
+                            pages,
+                            total,
+                        );
+                        let buttons = pagination::build_nav_buttons(
+                            "history_page",
+                            &resource_id,
+                            page,
+                            pages,
+                            &session_user_id,
+                        );
+
+                        let resp = serenity::builder::CreateInteractionResponse::UpdateMessage(
+                            serenity::builder::CreateInteractionResponseMessage::new()
+                                .embed(embed)
+                                .components(vec![buttons]),
+                        );
+                        let _ = interaction.create_response(&ctx.http, resp).await;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "pagination: failed to fetch history page");
+                    }
                 }
             }
 

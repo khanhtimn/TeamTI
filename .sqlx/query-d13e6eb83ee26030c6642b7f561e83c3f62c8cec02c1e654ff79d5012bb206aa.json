@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO favorites (user_id, track_id) VALUES ($1, $2)\n             ON CONFLICT (user_id, track_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d13e6eb83ee26030c6642b7f561e83c3f62c8cec02c1e654ff79d5012bb206aa"
+}

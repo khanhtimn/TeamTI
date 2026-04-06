@@ -73,7 +73,8 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
         disc_number: tag.and_then(|t| t.disk()),
         bpm: tag
             .and_then(|t| t.get_string(ItemKey::Bpm))
-            .and_then(|s| s.parse::<i32>().ok()),
+            .and_then(|s| s.parse::<i32>().ok())
+            .filter(|&b| b > 0),
         isrc: tag.and_then(|t| {
             t.get_string(ItemKey::Isrc)
                 .map(std::string::ToString::to_string)

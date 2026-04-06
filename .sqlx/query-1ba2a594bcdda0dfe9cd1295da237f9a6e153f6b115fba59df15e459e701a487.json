@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.title, t.artist_display,\n                            al.title AS album_title, t.album_id, t.duration_ms, t.blob_location\n                     FROM tracks t\n                     LEFT JOIN albums al ON al.id = t.album_id\n                     LEFT JOIN (\n                         SELECT track_id, COUNT(*) AS cnt\n                         FROM listen_events\n                         WHERE completed = true\n                         GROUP BY track_id\n                     ) gp ON gp.track_id = t.id\n                     WHERE t.id != ALL($1::uuid[])\n                     ORDER BY COALESCE(gp.cnt, 0) DESC, RANDOM()\n                     LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "artist_display",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "album_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "album_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "duration_ms",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "blob_location",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "1ba2a594bcdda0dfe9cd1295da237f9a6e153f6b115fba59df15e459e701a487"
+}

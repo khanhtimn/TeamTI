@@ -202,6 +202,20 @@ pub enum AppError {
         kind: TagWriteErrorKind,
     },
 
+    // ── Playlist ──────────────────────────────────────────────────────────
+    #[error("playlist error ({kind}): {detail}")]
+    Playlist {
+        kind: PlaylistErrorKind,
+        detail: String,
+    },
+
+    // ── Search ────────────────────────────────────────────────────────────
+    #[error("search error ({kind}): {detail}")]
+    Search {
+        kind: SearchErrorKind,
+        detail: String,
+    },
+
     // ── Startup / Config ─────────────────────────────────────────────────
     #[error("configuration error — {field}: {message}")]
     Config {
@@ -289,6 +303,34 @@ pub enum TagWriteErrorKind {
     LoftyError,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum PlaylistErrorKind {
+    #[error("not found")]
+    NotFound,
+    #[error("permission denied")]
+    Forbidden,
+    #[error("already exists")]
+    AlreadyExists,
+    #[error("collaborator limit")]
+    CollaboratorLimit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum SearchErrorKind {
+    #[error("index not initialized")]
+    NotInitialized,
+    #[error("index open failed")]
+    OpenFailed,
+    #[error("index write failed")]
+    WriteFailed,
+    #[error("index read failed")]
+    ReadFailed,
+    #[error("index rebuild failed")]
+    RebuildFailed,
+    #[error("malformed document")]
+    MalformedDocument,
+}
+
 impl AppError {
     /// Returns a stable, machine-readable string identifying the error kind.
     /// Used as the `error.kind` structured log field.
@@ -339,6 +381,20 @@ impl AppError {
             AppError::Fingerprint { .. } => "fingerprint",
             AppError::TagRead { .. } => "tag_read",
             AppError::TagWrite { .. } => "tag_write",
+            AppError::Playlist { kind, .. } => match kind {
+                PlaylistErrorKind::NotFound => "playlist.not_found",
+                PlaylistErrorKind::Forbidden => "playlist.forbidden",
+                PlaylistErrorKind::AlreadyExists => "playlist.already_exists",
+                PlaylistErrorKind::CollaboratorLimit => "playlist.collaborator_limit",
+            },
+            AppError::Search { kind, .. } => match kind {
+                SearchErrorKind::NotInitialized => "search.not_initialized",
+                SearchErrorKind::OpenFailed => "search.open_failed",
+                SearchErrorKind::WriteFailed => "search.write_failed",
+                SearchErrorKind::ReadFailed => "search.read_failed",
+                SearchErrorKind::RebuildFailed => "search.rebuild_failed",
+                SearchErrorKind::MalformedDocument => "search.malformed_document",
+            },
             AppError::Config { .. } => "config",
             AppError::WatcherInit { .. } => "watcher_init",
         }
@@ -385,10 +441,17 @@ impl Retryable for AppError {
                     | LrcLibErrorKind::ServiceUnavailable
             ),
 
+            // Search errors — retryable for transient I/O
+            AppError::Search { kind, .. } => matches!(
+                kind,
+                SearchErrorKind::WriteFailed | SearchErrorKind::ReadFailed
+            ),
+
             // Domain errors — not retryable
             AppError::TrackNotFound { .. }
             | AppError::AlbumNotFound { .. }
             | AppError::DuplicateTrack { .. }
+            | AppError::Playlist { .. }
             | AppError::Config { .. } => false,
 
             // Pipeline errors — not retryable; source must be investigated

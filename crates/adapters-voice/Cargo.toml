@@ -16,9 +16,10 @@ songbird = { workspace = true, features = [
     "rustls",
     "builtin-queue",
     "tungstenite",
-    "gateway"
+    "gateway",
 ] }
 serenity = { workspace = true, features = [
+    "cache",
     "gateway",
     "rustls_backend",
     "model",

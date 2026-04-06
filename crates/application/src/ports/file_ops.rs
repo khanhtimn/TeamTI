@@ -15,8 +15,8 @@ pub struct TagData {
     // Extended metadata
     pub bpm: Option<i32>,
     pub isrc: Option<String>,
-    pub composer: Option<String>,
-    pub lyricist: Option<String>,
+    pub composers: Vec<String>,
+    pub lyricists: Vec<String>,
     pub lyrics: Option<String>,
 }
 

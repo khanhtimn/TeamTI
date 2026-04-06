@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT id, title, artist_display, album_id, duration_ms, blob_location\n                FROM tracks\n                ORDER BY created_at DESC\n                LIMIT $1\n                ",
+  "query": "SELECT t.id, t.title, t.artist_display, a.title AS album_title,\n                    t.album_id, t.duration_ms, t.blob_location\n             FROM favorites f\n             JOIN tracks t ON t.id = f.track_id\n             LEFT JOIN albums a ON a.id = t.album_id\n             WHERE f.user_id = $1\n             ORDER BY f.created_at DESC\n             LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -20,22 +20,29 @@
       },
       {
         "ordinal": 3,
+        "name": "album_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
         "name": "album_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "duration_ms",
         "type_info": "Int4"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "blob_location",
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
+        "Text",
+        "Int8",
         "Int8"
       ]
     },
@@ -43,10 +50,11 @@
       false,
       false,
       true,
+      false,
       true,
       true,
       false
     ]
   },
-  "hash": "6db1a531886fcadd60340acbd8a07d5cf19b05cc7fe8ee0932e4c38d3a407121"
+  "hash": "a5161a75ea9bcc847d49bb18a78678d64ea8267aeb1a9cae221d382359c19356"
 }

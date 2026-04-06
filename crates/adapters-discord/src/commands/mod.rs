@@ -1,4 +1,9 @@
 pub mod clear;
+pub mod favourite;
+pub mod history;
 pub mod leave;
+pub mod pagination;
 pub mod play;
+pub mod playlist;
+pub mod radio;
 pub mod rescan;

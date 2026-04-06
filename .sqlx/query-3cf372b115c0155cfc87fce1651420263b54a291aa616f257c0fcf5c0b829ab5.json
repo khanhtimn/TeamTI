@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE listen_events\n             SET play_duration_ms = 0, completed = false\n             WHERE play_duration_ms IS NULL\n               AND started_at < NOW() - make_interval(secs => $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3cf372b115c0155cfc87fce1651420263b54a291aa616f257c0fcf5c0b829ab5"
+}

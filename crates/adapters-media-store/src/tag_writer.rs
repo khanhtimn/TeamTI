@@ -3,7 +3,7 @@ use std::path::Path;
 use lofty::config::WriteOptions;
 use lofty::prelude::*;
 use lofty::probe::Probe;
-use lofty::tag::{ItemKey, ItemValue, TagItem};
+use lofty::tag::{ItemKey, ItemValue, TagItem, TagType};
 
 use application::ports::file_ops::{TagData, WriteResult};
 
@@ -110,20 +110,64 @@ pub fn write_tags_atomic(path: &Path, tags: &TagData) -> Result<WriteResult, App
         }
 
         // F2 fix: write extended metadata fields.
-        if let Some(bpm) = tags.bpm {
-            tag.insert_text(ItemKey::Bpm, bpm.to_string());
+        match tags.bpm.filter(|&b| b > 0) {
+            Some(bpm) => {
+                tag.insert_text(ItemKey::Bpm, bpm.to_string());
+            }
+            None => {
+                tag.remove_key(ItemKey::Bpm);
+            }
         }
+
         if let Some(ref isrc) = tags.isrc {
-            tag.insert_text(ItemKey::Isrc, isrc.clone());
+            // ISRC is exactly 12 characters (no hyphens in canonical form)
+            // or 15 with hyphens. Reject anything clearly malformed.
+            let canonical = isrc.replace('-', "");
+            if canonical.len() == 12 {
+                tag.insert_text(ItemKey::Isrc, isrc.clone());
+            } else {
+                tracing::warn!(
+                    isrc = %isrc,
+                    operation = "tag_writer.isrc_invalid",
+                    "skipping malformed ISRC — expected 12 chars (without hyphens)"
+                );
+                tag.remove_key(ItemKey::Isrc);
+            }
+        } else {
+            tag.remove_key(ItemKey::Isrc);
         }
-        if let Some(ref composer) = tags.composer {
-            tag.insert_text(ItemKey::Composer, composer.clone());
-        }
-        if let Some(ref lyricist) = tags.lyricist {
-            tag.insert_text(ItemKey::Lyricist, lyricist.clone());
-        }
+
         if let Some(ref lyrics) = tags.lyrics {
-            tag.insert_text(ItemKey::Lyrics, lyrics.clone());
+            let write_value = match tag.tag_type() {
+                TagType::Id3v2 if is_lrc_format(lyrics) => {
+                    // TODO: SYLT (synchronized lyrics) support for ID3v2.
+                    // Currently strips LRC timestamps and writes plain USLT.
+                    // Implementing SYLT requires lofty's SynchronizedText API,
+                    // not insert_text. Defer until Discord lyrics display is implemented.
+                    lrc_to_plain(lyrics)
+                }
+                _ => lyrics.clone(),
+            };
+            tag.insert_text(ItemKey::Lyrics, write_value);
+        } else {
+            tag.remove_key(ItemKey::Lyrics);
+        }
+
+        // Multi-value extended fields
+        tag.remove_key(ItemKey::Composer);
+        for composer in &tags.composers {
+            tag.push(TagItem::new(
+                ItemKey::Composer,
+                ItemValue::Text(composer.clone()),
+            ));
+        }
+
+        tag.remove_key(ItemKey::Lyricist);
+        for lyricist in &tags.lyricists {
+            tag.push(TagItem::new(
+                ItemKey::Lyricist,
+                ItemValue::Text(lyricist.clone()),
+            ));
         }
 
         // Save modified tags to the TEMP file (not the original)
@@ -211,4 +255,43 @@ impl Drop for TempGuard {
             let _ = std::fs::remove_file(&self.path);
         }
     }
+}
+
+/// Returns true if the string contains LRC timestamp markers.
+/// A timestamp line looks like: [mm:ss.xx] or [mm:ss.xxx]
+fn is_lrc_format(s: &str) -> bool {
+    s.lines().any(|line| {
+        let t = line.trim();
+        t.starts_with('[') && {
+            // Check for [digits:digits pattern
+            let inner = t.trim_start_matches('[');
+            inner
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+        }
+    })
+}
+
+/// Strip LRC timestamp prefixes, returning plain text lyrics.
+/// "[00:15.12] Hello\n[00:18.50] World" → "Hello\nWorld"
+fn lrc_to_plain(s: &str) -> String {
+    s.lines()
+        .filter_map(|line| {
+            let t = line.trim();
+            if t.is_empty() {
+                return None;
+            }
+            // Strip leading [timestamp] — find the closing ']'
+            if t.starts_with('[') {
+                t.find(']')
+                    .map(|i| t[i + 1..].trim().to_owned())
+                    .filter(|s| !s.is_empty())
+            } else {
+                Some(t.to_owned())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

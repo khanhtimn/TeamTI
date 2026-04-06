@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE playlists SET visibility = $1, updated_at = now() WHERE id = $2 AND owner_id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e56938792b185175adbecee99141b1d2b5e54db36e3b28271eca66cbd51ded5d"
+}

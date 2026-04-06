@@ -568,73 +568,40 @@ impl TrackRepository for PgTrackRepository {
 
         Ok(())
     }
-}
 
-use application::ports::search::TrackSearchPort;
-use domain::track::TrackSummary;
+    async fn get_credits(
+        &self,
+        track_id: Uuid,
+    ) -> Result<application::ports::repository::TrackCredits, AppError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT ar.name, ta.role as "role: domain::ArtistRole", ta.position
+            FROM track_artists ta
+            JOIN artists ar ON ar.id = ta.artist_id
+            WHERE ta.track_id = $1
+              AND ta.role IN ('composer', 'lyricist')
+            ORDER BY ta.role, ta.position ASC
+            "#,
+            track_id
+        )
+        .fetch_all(&self.db.0)
+        .await
+        .map_err(crate::db_err!("track.get_credits"))?;
 
-#[async_trait]
-impl TrackSearchPort for PgTrackRepository {
-    async fn search(&self, query: &str, limit: i64) -> Result<Vec<TrackSummary>, AppError> {
-        let normalized = query.trim().to_lowercase();
+        let mut composers = Vec::new();
+        let mut lyricists = Vec::new();
 
-        if normalized.is_empty() {
-            let rows = sqlx::query_as!(
-                TrackSummary,
-                r#"
-                SELECT id, title, artist_display, album_id, duration_ms, blob_location
-                FROM tracks
-                ORDER BY created_at DESC
-                LIMIT $1
-                "#,
-                limit
-            )
-            .fetch_all(&self.db.0)
-            .await
-            .map_err(crate::db_err!("track.search_empty"))?;
-            return Ok(rows);
+        for row in rows {
+            match row.role {
+                domain::ArtistRole::Composer => composers.push(row.name),
+                domain::ArtistRole::Lyricist => lyricists.push(row.name),
+                _ => {}
+            }
         }
 
-        let rows = sqlx::query_as!(
-            TrackSummary,
-            r#"
-            SELECT id, title, artist_display, album_id, duration_ms, blob_location
-            FROM tracks
-            WHERE
-                search_vector @@ websearch_to_tsquery('music_simple', $1)
-                OR search_text ILIKE '%' || $2 || '%'
-            ORDER BY
-                ts_rank(search_vector, websearch_to_tsquery('music_simple', $1)) DESC,
-                similarity(search_text, $2) DESC
-            LIMIT $3
-            "#,
-            normalized,
-            normalized,
-            limit as i64
-        )
-        .fetch_all(&self.db.0)
-        .await
-        .map_err(crate::db_err!("track.search"))?;
-        Ok(rows)
-    }
-
-    async fn autocomplete(&self, prefix: &str, limit: i64) -> Result<Vec<TrackSummary>, AppError> {
-        let pattern = format!("{}%", prefix.to_lowercase());
-        let rows = sqlx::query_as!(
-            TrackSummary,
-            r#"
-            SELECT id, title, artist_display, album_id, duration_ms, blob_location
-            FROM tracks
-            WHERE search_text LIKE $1
-            ORDER BY title ASC
-            LIMIT $2
-            "#,
-            pattern,
-            limit
-        )
-        .fetch_all(&self.db.0)
-        .await
-        .map_err(crate::db_err!("track.autocomplete"))?;
-        Ok(rows)
+        Ok(application::ports::repository::TrackCredits {
+            composers,
+            lyricists,
+        })
     }
 }
