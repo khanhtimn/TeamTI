@@ -1070,6 +1070,7 @@ fn error_to_user_message(err: &application::AppError) -> String {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_play(
     http: &Arc<Http>,
     cache: &Arc<Cache>,

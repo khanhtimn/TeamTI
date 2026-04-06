@@ -68,6 +68,7 @@ pub async fn leave_channel(
 /// Enqueue a track into Songbird's builtin queue.
 /// Attaches a `TrackEventHandler` for metadata sync, "Now Playing" messages,
 /// and auto-leave on idle.
+#[allow(clippy::too_many_arguments)]
 pub async fn enqueue_track(
     songbird: &Arc<songbird::Songbird>,
     guild_id: GuildId,
