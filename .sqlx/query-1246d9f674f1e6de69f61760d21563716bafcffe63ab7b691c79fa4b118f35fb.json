@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET analysis_status = 'pending',\n                analysis_locked = false,\n                updated_at      = now()\n            WHERE analysis_status = 'processing'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "1246d9f674f1e6de69f61760d21563716bafcffe63ab7b691c79fa4b118f35fb"
+}

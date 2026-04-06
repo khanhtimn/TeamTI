@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
-tracing.workspace = true
+tracing = { workspace = true, features = ["default"] }
 tracing-subscriber = { workspace = true, features = [
     "env-filter",
     "fmt",

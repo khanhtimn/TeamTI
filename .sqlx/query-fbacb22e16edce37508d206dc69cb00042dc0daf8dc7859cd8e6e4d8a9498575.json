@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE listen_events\n             SET play_duration_ms = $1, completed = $2\n             WHERE track_id = $3 AND guild_id = $4 AND play_duration_ms IS NULL\n             RETURNING user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Bool",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fbacb22e16edce37508d206dc69cb00042dc0daf8dc7859cd8e6e4d8a9498575"
+}

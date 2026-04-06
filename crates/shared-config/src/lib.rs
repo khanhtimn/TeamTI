@@ -89,9 +89,18 @@ pub struct Config {
     /// on network interruption. The index is fully reconstructable from
     /// PostgreSQL in ~2 seconds.
     ///
-    /// Env var: TANTIVY_INDEX_PATH
-    /// Default: "./search_index"
+    /// Absolute path to the Tantivy index directory.
     pub tantivy_index_path: PathBuf,
+
+    // --- Pass 4 fields ---
+    /// Last.fm API key for similar-artist lookups. Optional.
+    pub lastfm_api_key: Option<String>,
+
+    /// Max concurrent bliss-audio analysis tasks. Default: 4.
+    pub analysis_concurrency: usize,
+
+    /// Seconds between analysis worker poll cycles. Default: 30.
+    pub analysis_poll_secs: u64,
 }
 
 impl Config {
@@ -133,6 +142,11 @@ impl Config {
                 .map_or(true, |v| v != "0" && v.to_lowercase() != "false"),
             tantivy_index_path: std::env::var("TANTIVY_INDEX_PATH")
                 .map_or_else(|_| PathBuf::from("./search_index"), PathBuf::from),
+            lastfm_api_key: std::env::var("LASTFM_API_KEY")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            analysis_concurrency: parse_env("ANALYSIS_CONCURRENCY", 4usize)?,
+            analysis_poll_secs: parse_env("ANALYSIS_POLL_SECS", 30u64)?,
         })
     }
 

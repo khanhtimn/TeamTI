@@ -6,6 +6,10 @@
 -- (adapters-search). The unaccent extension is retained because
 -- immutable_unaccent() is used by the Tantivy rebuild query.
 
+-- pgvector: enables vector(N) column type and <-> distance operators.
+-- Required by Pass 4 for bliss-audio feature vectors.
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
 -- Standard unaccent() is STABLE, not IMMUTABLE.

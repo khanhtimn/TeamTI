@@ -29,3 +29,31 @@ CREATE INDEX IF NOT EXISTS idx_listen_events_track_global
 
 CREATE INDEX IF NOT EXISTS idx_listen_events_track
     ON listen_events(track_id);
+
+-- Analysis worker queue (mirrors idx_tracks_enrichment_queue)
+CREATE INDEX IF NOT EXISTS idx_tracks_analysis_queue
+ON tracks(analysis_status, analysis_attempts, analyzed_at)
+WHERE analysis_locked = false
+  AND analysis_status IN ('pending', 'failed');
+
+-- Vector similarity: used by pgvector ANN queries
+-- For 20-dim vectors at 50k rows, HNSW is optional — add if query
+-- latency exceeds 5ms under load.
+CREATE INDEX IF NOT EXISTS idx_tracks_bliss_vector
+ON tracks USING hnsw (bliss_vector vector_l2_ops);
+
+-- Last.fm lookup
+CREATE INDEX IF NOT EXISTS idx_similar_artists_source
+ON similar_artists(source_mbid);
+
+-- Affinity recommendations for a user, ranked by combined score
+CREATE INDEX IF NOT EXISTS idx_user_track_affinities_user
+ON user_track_affinities(user_id, combined_score DESC);
+
+-- Discovery page: genre trends
+CREATE INDEX IF NOT EXISTS idx_user_genre_stats_user
+ON user_genre_stats(user_id, period_start DESC, play_count DESC);
+
+-- Discovery page: server popularity
+CREATE INDEX IF NOT EXISTS idx_guild_track_stats_guild
+ON guild_track_stats(guild_id, period_start DESC, play_count DESC);

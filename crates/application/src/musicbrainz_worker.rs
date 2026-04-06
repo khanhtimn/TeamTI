@@ -3,7 +3,7 @@ use tokio::sync::mpsc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::events::{ToLyrics, ToMusicBrainz};
+use crate::events::{ToLastFm, ToMusicBrainz};
 use crate::ports::{AlbumRepository, ArtistRepository, MusicBrainzPort, TrackRepository};
 use domain::{Album, AlbumArtist, Artist, ArtistRole, EnrichmentStatus, TrackArtist};
 
@@ -20,7 +20,7 @@ impl MusicBrainzWorker {
     pub async fn run(
         self: Arc<Self>,
         mut rx: mpsc::Receiver<ToMusicBrainz>,
-        lyrics_tx: mpsc::Sender<ToLyrics>,
+        lastfm_tx: mpsc::Sender<ToLastFm>,
     ) {
         while let Some(msg) = rx.recv().await {
             // Rate limiting enforced inside the port.
@@ -56,8 +56,8 @@ impl MusicBrainzWorker {
                             .filter(|p| *p != std::path::Path::new(""))
                             .map(|p| p.to_string_lossy().into_owned());
 
-                        let _ = lyrics_tx
-                            .send(ToLyrics {
+                        let _ = lastfm_tx
+                            .send(ToLastFm {
                                 track_id: msg.track_id,
                                 release_mbid: String::new(),
                                 album_dir,
@@ -68,6 +68,7 @@ impl MusicBrainzWorker {
                                 artist_name: track.artist_display.unwrap_or_default(),
                                 album_name: None,
                                 duration_secs: msg.duration_secs,
+                                artist_mbids: vec![],
                             })
                             .await;
                     }
@@ -284,8 +285,14 @@ impl MusicBrainzWorker {
                 .filter(|p| *p != std::path::Path::new(""))
                 .map(|p| p.to_string_lossy().into_owned());
 
-            let _ = lyrics_tx
-                .send(ToLyrics {
+            // Collect artist MBIDs for Last.fm lookups
+            let artist_mbids: Vec<String> = upserted_artists
+                .iter()
+                .filter_map(|a| a.mbid.clone())
+                .collect();
+
+            let _ = lastfm_tx
+                .send(ToLastFm {
                     track_id: msg.track_id,
                     release_mbid: recording.release_mbid,
                     album_dir,
@@ -296,6 +303,7 @@ impl MusicBrainzWorker {
                     artist_name: primary_artist_display,
                     album_name: Some(recording.release_title),
                     duration_secs: msg.duration_secs,
+                    artist_mbids,
                 })
                 .await;
         }

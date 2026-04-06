@@ -31,7 +31,9 @@ impl TrackRepository for PgTrackRepository {
                 file_size_bytes, blob_location, mbid, acoustid_id,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
-                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at
+                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
+                analysis_status as "analysis_status: domain::AnalysisStatus",
+                analysis_attempts, analysis_locked, analyzed_at
             FROM tracks WHERE id = $1 LIMIT 1"#,
             id,
         )
@@ -52,7 +54,9 @@ impl TrackRepository for PgTrackRepository {
                 file_size_bytes, blob_location, mbid, acoustid_id,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
-                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at
+                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
+                analysis_status as "analysis_status: domain::AnalysisStatus",
+                analysis_attempts, analysis_locked, analyzed_at
             FROM tracks WHERE fingerprint_hash = md5($1) LIMIT 1"#,
             fingerprint,
         )
@@ -73,7 +77,9 @@ impl TrackRepository for PgTrackRepository {
                 file_size_bytes, blob_location, mbid, acoustid_id,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
-                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at
+                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
+                analysis_status as "analysis_status: domain::AnalysisStatus",
+                analysis_attempts, analysis_locked, analyzed_at
             FROM tracks WHERE blob_location = $1 LIMIT 1"#,
             location,
         )
@@ -95,25 +101,27 @@ impl TrackRepository for PgTrackRepository {
         // PERF-2: Use UNNEST + JOIN instead of = ANY($1) for better index
         // utilization on large arrays. PostgreSQL can plan this as an
         // index nested-loop join regardless of array size.
-        //
-        // Category 3: Dynamic query — UNNEST($1::text[]) is not supported
-        // by query_as! due to the explicit cast. Stays as runtime query_as.
-        let q = r"
-            SELECT
+        let tracks = sqlx::query_as!(
+            Track,
+            r#"
+            SELECT 
                 id, title, artist_display, album_id, track_number, disc_number,
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
-                enrichment_status, enrichment_confidence, enrichment_attempts,
-                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at
+                enrichment_status as "enrichment_status: _", 
+                enrichment_confidence, enrichment_attempts,
+                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
+                analysis_status as "analysis_status: _", 
+                analysis_attempts, analysis_locked, analyzed_at
             FROM tracks t
             JOIN UNNEST($1::text[]) AS u(loc) ON t.blob_location = u.loc
-        ";
-        let tracks = sqlx::query_as::<_, Track>(q)
-            .bind(locations)
-            .fetch_all(&self.db.0)
-            .await
-            .map_err(crate::db_err!("track.find_many_by_blob_location"))?;
+            "#,
+            &locations
+        )
+        .fetch_all(&self.db.0)
+        .await
+        .map_err(crate::db_err!("track.find_many_by_blob_location"))?;
 
         let map: std::collections::HashMap<String, Track> = tracks
             .into_iter()
@@ -209,7 +217,9 @@ impl TrackRepository for PgTrackRepository {
                 file_size_bytes, blob_location, mbid, acoustid_id,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
-                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at
+                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
+                analysis_status as "analysis_status: domain::AnalysisStatus",
+                analysis_attempts, analysis_locked, analyzed_at
             FROM tracks WHERE fingerprint_hash = md5($1)"#,
             track.audio_fingerprint,
         )
@@ -381,7 +391,9 @@ impl TrackRepository for PgTrackRepository {
                 file_size_bytes, blob_location, mbid, acoustid_id,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
-                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at"#,
+                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
+                analysis_status as "analysis_status: domain::AnalysisStatus",
+                analysis_attempts, analysis_locked, analyzed_at"#,
             id,
         )
         .fetch_optional(&self.db.0)
@@ -427,7 +439,9 @@ impl TrackRepository for PgTrackRepository {
                 file_size_bytes, blob_location, mbid, acoustid_id,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
-                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at"#,
+                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
+                analysis_status as "analysis_status: domain::AnalysisStatus",
+                analysis_attempts, analysis_locked, analyzed_at"#,
             failed_retry_limit,
             unmatched_retry_limit,
             limit,
@@ -539,7 +553,9 @@ impl TrackRepository for PgTrackRepository {
                 file_size_bytes, blob_location, mbid, acoustid_id,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
-                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at
+                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
+                analysis_status as "analysis_status: domain::AnalysisStatus",
+                analysis_attempts, analysis_locked, analyzed_at
             FROM tracks
             WHERE enrichment_status = 'done' AND tags_written_at IS NULL
             ORDER BY updated_at ASC LIMIT $1"#,
@@ -603,5 +619,174 @@ impl TrackRepository for PgTrackRepository {
             composers,
             lyricists,
         })
+    }
+
+    // ── Analysis worker methods ──────────────────────────────────────
+
+    async fn claim_for_analysis(&self, limit: i64) -> Result<Vec<Track>, AppError> {
+        let tracks = sqlx::query_as!(
+            Track,
+            r#"UPDATE tracks
+            SET analysis_status = 'processing', analysis_locked = true, updated_at = now()
+            WHERE id IN (
+                SELECT id FROM tracks
+                WHERE analysis_locked = false
+                  AND analysis_status IN ('pending', 'failed')
+                  AND analysis_attempts < 3
+                ORDER BY created_at ASC
+                LIMIT $1
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING
+                id, title, artist_display, album_id, track_number, disc_number,
+                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
+                audio_fingerprint, file_modified_at,
+                file_size_bytes, blob_location, mbid, acoustid_id,
+                enrichment_status as "enrichment_status: EnrichmentStatus",
+                enrichment_confidence, enrichment_attempts,
+                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
+                analysis_status as "analysis_status: domain::AnalysisStatus",
+                analysis_attempts, analysis_locked, analyzed_at"#,
+            limit,
+        )
+        .fetch_all(&self.db.0)
+        .await
+        .map_err(crate::db_err!("track.claim_for_analysis"))?;
+
+        Ok(tracks)
+    }
+
+    async fn unlock_stale_analysis_rows(
+        &self,
+        older_than: std::time::Duration,
+    ) -> Result<u64, AppError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE tracks
+            SET analysis_locked = false,
+                analysis_status = 'pending'
+            WHERE analysis_locked = true
+              AND analysis_status = 'processing'
+              AND updated_at < NOW() - make_interval(secs => $1)
+            "#,
+            older_than.as_secs() as f64
+        )
+        .execute(&self.db.0)
+        .await
+        .map_err(crate::db_err!("track.unlock_stale_analysis_rows"))?;
+
+        Ok(result.rows_affected())
+    }
+
+    async fn update_analysis_done(
+        &self,
+        track_id: Uuid,
+        bliss_vector: &[f32],
+    ) -> Result<(), AppError> {
+        // Use pgvector::Vector for the $2 bind parameter
+        let vec = pgvector::Vector::from(bliss_vector.to_vec());
+        sqlx::query!(
+            r#"
+            UPDATE tracks
+            SET analysis_status  = 'done',
+                analysis_locked  = false,
+                analyzed_at      = now(),
+                bliss_vector     = $2,
+                updated_at       = now()
+            WHERE id = $1
+            "#,
+            track_id,
+            vec as pgvector::Vector
+        )
+        .execute(&self.db.0)
+        .await
+        .map_err(crate::db_err!("track.update_analysis_done"))?;
+        Ok(())
+    }
+
+    async fn update_analysis_failed(&self, track_id: Uuid) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            UPDATE tracks
+            SET analysis_status   = 'failed',
+                analysis_locked   = false,
+                analysis_attempts = analysis_attempts + 1,
+                updated_at        = now()
+            WHERE id = $1
+            "#,
+            track_id,
+        )
+        .execute(&self.db.0)
+        .await
+        .map_err(crate::db_err!("track.update_analysis_failed"))?;
+        Ok(())
+    }
+
+    async fn reset_stale_analyzing(&self) -> Result<u64, AppError> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE tracks
+            SET analysis_status = 'pending',
+                analysis_locked = false,
+                updated_at      = now()
+            WHERE analysis_status = 'processing'
+            "#,
+        )
+        .execute(&self.db.0)
+        .await
+        .map_err(crate::db_err!("track.reset_stale_analyzing"))?;
+
+        Ok(result.rows_affected())
+    }
+
+    // ── Last.fm similarity cache ─────────────────────────────────────
+
+    async fn get_cached_similar_artists(&self, mbids: &[String]) -> Result<Vec<String>, AppError> {
+        if mbids.is_empty() {
+            return Ok(Vec::new());
+        }
+        struct RowResult {
+            source_mbid: Option<String>,
+        }
+        let rows = sqlx::query_as!(
+            RowResult,
+            r#"
+            SELECT source_mbid
+            FROM similar_artists
+            WHERE source_mbid = ANY($1)
+            GROUP BY source_mbid
+            "#,
+            mbids
+        )
+        .fetch_all(&self.db.0)
+        .await
+        .map_err(crate::db_err!("track.get_cached_similar_artists"))?;
+
+        Ok(rows.into_iter().filter_map(|r| r.source_mbid).collect())
+    }
+
+    async fn upsert_similar_artists(
+        &self,
+        source_mbid: &str,
+        similar: &[application::ports::lastfm::SimilarArtist],
+    ) -> Result<(), AppError> {
+        for s in similar {
+            sqlx::query!(
+                r#"
+                INSERT INTO similar_artists (source_mbid, similar_mbid, similarity_score)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (source_mbid, similar_mbid)
+                DO UPDATE SET similarity_score = EXCLUDED.similarity_score,
+                             fetched_at = now()
+                "#,
+                source_mbid,
+                s.mbid,
+                s.similarity_score,
+            )
+            .execute(&self.db.0)
+            .await
+            .map_err(crate::db_err!("track.upsert_similar_artists"))?;
+        }
+        Ok(())
     }
 }

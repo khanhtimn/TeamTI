@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at\n            FROM tracks WHERE fingerprint_hash = md5($1) LIMIT 1",
+  "query": "SELECT\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,\n                analysis_status as \"analysis_status: domain::AnalysisStatus\",\n                analysis_attempts, analysis_locked, analyzed_at\n            FROM tracks\n            WHERE enrichment_status = 'done' AND tags_written_at IS NULL\n            ORDER BY updated_at ASC LIMIT $1",
   "describe": {
     "columns": [
       {
@@ -152,11 +152,31 @@
         "ordinal": 29,
         "name": "tags_written_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 30,
+        "name": "analysis_status: domain::AnalysisStatus",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 31,
+        "name": "analysis_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 32,
+        "name": "analysis_locked",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 33,
+        "name": "analyzed_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Int8"
       ]
     },
     "nullable": [
@@ -189,8 +209,12 @@
       true,
       false,
       false,
+      true,
+      false,
+      false,
+      false,
       true
     ]
   },
-  "hash": "9e729efd30b31d4d9a3ec349b8704d6b57e1d01d1b1186dbb7cccecb4f84b87d"
+  "hash": "ef03c14a852d3230006a95a487d5ac9838e66ecbd87f7c58f614911ca9cfe69a"
 }

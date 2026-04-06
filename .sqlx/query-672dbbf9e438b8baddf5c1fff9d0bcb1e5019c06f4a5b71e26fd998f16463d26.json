@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE tracks\n            SET enrichment_status = 'enriching', updated_at = now()\n            WHERE id IN (\n                SELECT id FROM tracks\n                WHERE enrichment_locked = false\n                  AND (\n                    (enrichment_status IN ('pending', 'failed', 'low_confidence')\n                     AND enrichment_attempts < $1\n                     AND (enriched_at IS NULL OR enriched_at < now() - INTERVAL '1 hour'))\n                    OR\n                    (enrichment_status = 'unmatched'\n                     AND enrichment_attempts < $2\n                     AND enriched_at < now() - INTERVAL '24 hours')\n                  )\n                ORDER BY created_at ASC\n                LIMIT $3\n                FOR UPDATE SKIP LOCKED\n            )\n            RETURNING\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at",
+  "query": "SELECT\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,\n                analysis_status as \"analysis_status: domain::AnalysisStatus\",\n                analysis_attempts, analysis_locked, analyzed_at\n            FROM tracks WHERE fingerprint_hash = md5($1) LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -152,13 +152,31 @@
         "ordinal": 29,
         "name": "tags_written_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 30,
+        "name": "analysis_status: domain::AnalysisStatus",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 31,
+        "name": "analysis_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 32,
+        "name": "analysis_locked",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 33,
+        "name": "analyzed_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Int4",
-        "Int4",
-        "Int8"
+        "Text"
       ]
     },
     "nullable": [
@@ -191,8 +209,12 @@
       true,
       false,
       false,
+      true,
+      false,
+      false,
+      false,
       true
     ]
   },
-  "hash": "9e7f7526ad6aac14b448a8451bd8a3403992d172f794fb50b3da374a1613fb1c"
+  "hash": "672dbbf9e438b8baddf5c1fff9d0bcb1e5019c06f4a5b71e26fd998f16463d26"
 }

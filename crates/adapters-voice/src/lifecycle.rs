@@ -34,6 +34,13 @@ pub enum TrackLifecycleEvent {
         user_id: String,
         seed_track_id: Option<Uuid>,
     },
+    /// Pass 4: A listen event completed — the lifecycle worker should
+    /// refresh the user's affinities and update genre/guild stats.
+    AffinityUpdate {
+        guild_id: GuildId,
+        user_id: String,
+        track_id: Uuid,
+    },
 }
 
 /// Sender half of the lifecycle event channel.

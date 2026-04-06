@@ -20,5 +20,5 @@ serenity = { workspace = true, features = [
 ] }
 async-trait = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
-tracing = { workspace = true }
+tracing = { workspace = true, features = ["default"] }
 uuid = { workspace = true, features = ["v4", "serde", "fast-rng"] }

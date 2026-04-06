@@ -28,8 +28,8 @@ serenity = { workspace = true, features = [
 ] }
 tokio = { workspace = true, features = ["sync", "time"] }
 tokio-util = { workspace = true, features = ["rt"] }
-tracing = { workspace = true }
-uuid = { workspace = true }
+tracing = { workspace = true, features = ["default"] }
+uuid = { workspace = true, features = ["v4", "serde", "fast-rng"] }
 dashmap = { workspace = true, features = ["inline", "serde"] }
 async-trait = { workspace = true }
-thiserror = { workspace = true }
+thiserror = { workspace = true, features = ["default"] }

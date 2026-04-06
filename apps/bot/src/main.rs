@@ -7,9 +7,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use adapters_acoustid::AcoustIdAdapter;
+use adapters_analysis::BlissAnalysisAdapter;
 use adapters_cover_art::CoverArtAdapter;
 use adapters_discord::handler::DiscordEventHandler;
 use adapters_discord::lifecycle_worker::run_lifecycle_worker;
+use adapters_lastfm::LastFmAdapter;
 use adapters_lyrics::LyricsAdapter;
 use adapters_media_store::fs_store::FsStore;
 use adapters_media_store::scanner::MediaScanner;
@@ -25,7 +27,7 @@ use adapters_persistence::repositories::track_repository::PgTrackRepository;
 use adapters_persistence::repositories::user_library_repository::PgUserLibraryRepository;
 use adapters_search::TantivySearchAdapter;
 use adapters_voice::state_map::GuildStateMap;
-use application::events::{ToCoverArt, ToLyrics, ToMusicBrainz, ToTagWriter};
+use application::events::{ToCoverArt, ToLastFm, ToLyrics, ToMusicBrainz, ToTagWriter};
 use application::ports::playlist::PlaylistPort;
 use application::ports::recommendation::RecommendationPort;
 use application::ports::repository::{AlbumRepository, ArtistRepository, TrackRepository};
@@ -33,8 +35,8 @@ use application::ports::search::TrackSearchPort;
 use application::ports::user_library::UserLibraryPort;
 use application::tag_writer_worker::run_startup_tag_poller;
 use application::{
-    AcoustIdWorker, CoverArtWorker, EnrichmentOrchestrator, LyricsWorker, MusicBrainzWorker,
-    TagWriterWorker,
+    AcoustIdWorker, AnalysisWorker, CoverArtWorker, EnrichmentOrchestrator, LastFmWorker,
+    LyricsWorker, MusicBrainzWorker, TagWriterWorker,
 };
 use shared_config::Config;
 
@@ -85,6 +87,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Reset stale enriching tracks to pending"
         );
     }
+    let analysis_reset = track_repo
+        .unlock_stale_analysis_rows(std::time::Duration::from_secs(3600))
+        .await
+        .expect("stale analyzing watchdog failed");
+    if analysis_reset > 0 {
+        info!(
+            count = analysis_reset,
+            "Reset stale analyzing tracks to pending"
+        );
+    }
 
     let _media_store = Arc::new(FsStore::new(&config.media_root));
 
@@ -130,6 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (acoustid_tx, acoustid_rx) = mpsc::channel(64);
     let (mb_tx, mb_rx) = mpsc::channel::<ToMusicBrainz>(64);
+    let (lastfm_tx, lastfm_rx) = mpsc::channel::<ToLastFm>(64);
     let (lyrics_tx, lyrics_rx) = mpsc::channel::<ToLyrics>(64);
     let (cover_tx, cover_rx) = mpsc::channel::<ToCoverArt>(64);
     let (tag_writer_tx, tag_writer_rx) = mpsc::channel::<ToTagWriter>(128);
@@ -166,7 +179,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::select! {
                 biased;
                 _ = tok.cancelled() => {}
-                _ = worker.run(mb_rx, lyrics_tx) => {}
+                _ = worker.run(mb_rx, lastfm_tx) => {}
+            }
+        });
+    }
+
+    // Pass 4: Last.fm Worker (LastFm → Lyrics)
+    {
+        let worker = Arc::new(LastFmWorker {
+            port: if let Some(ref api_key) = config.lastfm_api_key {
+                Arc::new(LastFmAdapter::new(api_key.clone()))
+            } else {
+                // No API key — create a dummy that returns empty results
+                Arc::new(LastFmAdapter::new(String::new()))
+            },
+            repo: Arc::clone(&track_repo) as Arc<dyn TrackRepository>,
+        });
+        let tok = token.clone();
+        tokio::spawn(async move {
+            tokio::select! {
+                biased;
+                _ = tok.cancelled() => {}
+                _ = worker.run(lastfm_rx, lyrics_tx) => {}
             }
         });
     }
@@ -262,6 +296,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
+    // Pass 4: Analysis Worker (background — independent from enrichment pipeline)
+    {
+        let worker = Arc::new(AnalysisWorker {
+            port: Arc::new(BlissAnalysisAdapter::new()),
+            repo: Arc::clone(&track_repo) as Arc<dyn TrackRepository>,
+            media_root: config.media_root.clone(),
+            concurrency: config.analysis_concurrency,
+            poll_interval_secs: config.analysis_poll_secs,
+            max_attempts: 3,
+        });
+        let tok = token.clone();
+        tokio::spawn(async move {
+            tokio::select! {
+                biased;
+                _ = tok.cancelled() => {}
+                _ = worker.run() => {}
+            }
+        });
+    }
+
     // ── Discord Bot ────────────────────────────────────────────────────
     let intents = GatewayIntents::GUILDS
         | GatewayIntents::GUILD_VOICE_STATES
@@ -302,6 +356,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let ulp = Arc::clone(&user_library_port);
         let rp = Arc::clone(&recommendation_port);
+        let tr = Arc::clone(&track_repo) as Arc<dyn TrackRepository>;
         let gs = Arc::clone(&state_map);
         let sb = songbird_instance.clone();
         let tok = token.clone();
@@ -314,7 +369,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::select! {
                 biased;
                 _ = tok.cancelled() => {}
-                _ = run_lifecycle_worker(lifecycle_rx, ulp, rp, gs, sb, http_clone, cache_clone, media, als, ltx) => {}
+                _ = run_lifecycle_worker(lifecycle_rx, ulp, rp, tr, gs, sb, http_clone, cache_clone, media, als, ltx) => {}
             }
         });
     }

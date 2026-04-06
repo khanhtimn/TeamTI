@@ -11,11 +11,11 @@ shared-config = { path = "../shared-config" }
 adapters-watcher = { path = "../adapters-watcher" }
 
 tokio = { workspace = true, features = ["rt", "time", "sync", "fs"] }
-tracing.workspace = true
-thiserror.workspace = true
+tracing = { workspace = true, features = ["default"] }
+thiserror = { workspace = true, features = ["default"] }
 async-trait.workspace = true
 uuid = { workspace = true, features = ["v4", "serde", "fast-rng"] }
-chrono = { workspace = true, features = ["serde"] }
+chrono = { workspace = true, features = ["default", "serde"] }
 bytes.workspace = true
 symphonia = { workspace = true, features = ["mp3", "aac", "isomp4", "alac", "ogg", "vorbis", "wav", "flac"] }
 lofty.workspace = true

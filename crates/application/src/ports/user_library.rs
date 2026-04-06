@@ -48,7 +48,7 @@ pub trait UserLibraryPort: Send + Sync {
         guild_id: &str,
         play_duration_ms: i32,
         track_duration_ms: i32,
-    ) -> Result<u64, AppError>;
+    ) -> Result<Vec<String>, AppError>;
 
     async fn recent_history(
         &self,

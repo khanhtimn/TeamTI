@@ -1,0 +1,17 @@
+[package]
+name = "adapters-analysis"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+application = { path = "../application" }
+domain = { path = "../domain" }
+bliss-audio = { workspace = true, default-features = false, features = ["symphonia-all", "aubio-static"] }
+# NOTE: bliss-audio v0.11 unconditionally depends on bliss-audio-aubio-rs
+# so we MUST enable bindgen to allow compilation on macOS ARM64.
+bliss-audio-aubio-rs = { version = "0.2", features = ["bindgen"] }
+tokio = { workspace = true, features = ["rt"] }
+tracing = { workspace = true, features = ["default"] }
+thiserror = { workspace = true, features = ["default"] }
+async-trait = { workspace = true }

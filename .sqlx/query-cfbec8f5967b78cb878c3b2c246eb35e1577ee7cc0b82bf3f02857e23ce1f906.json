@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT source_mbid\n            FROM similar_artists\n            WHERE source_mbid = ANY($1)\n            GROUP BY source_mbid\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_mbid",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cfbec8f5967b78cb878c3b2c246eb35e1577ee7cc0b82bf3f02857e23ce1f906"
+}

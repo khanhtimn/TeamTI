@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET analysis_locked = false,\n                analysis_status = 'pending'\n            WHERE analysis_locked = true\n              AND analysis_status = 'processing'\n              AND updated_at < NOW() - make_interval(secs => $1)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7f9854c0e7593c18502118c19f94cbddd22ed397f6da2799575de5824b16374"
+}

@@ -170,27 +170,52 @@ impl UserLibraryPort for PgUserLibraryRepository {
         guild_id: &str,
         play_duration_ms: i32,
         track_duration_ms: i32,
-    ) -> Result<u64, AppError> {
+    ) -> Result<Vec<String>, AppError> {
         let completed = if track_duration_ms > 0 {
             (play_duration_ms as f32 / track_duration_ms as f32) >= LISTEN_COMPLETION_THRESHOLD
         } else {
             false
         };
 
-        let result = sqlx::query!(
+        // IF not completed, we still update it but don't need to trigger affinity update downstream.
+        if !completed {
+            sqlx::query!(
+                "UPDATE listen_events
+                 SET play_duration_ms = $1, completed = $2
+                 WHERE track_id = $3 AND guild_id = $4 AND play_duration_ms IS NULL",
+                play_duration_ms,
+                completed,
+                track_id,
+                guild_id
+            )
+            .execute(&self.db.0)
+            .await
+            .map_err(db_err!("user_library.close_listen_events_for_track"))?;
+
+            return Ok(Vec::new());
+        }
+
+        struct RowResult {
+            user_id: String,
+        }
+        let result = sqlx::query_as!(
+            RowResult,
             "UPDATE listen_events
              SET play_duration_ms = $1, completed = $2
-             WHERE track_id = $3 AND guild_id = $4 AND play_duration_ms IS NULL",
+             WHERE track_id = $3 AND guild_id = $4 AND play_duration_ms IS NULL
+             RETURNING user_id",
             play_duration_ms,
             completed,
             track_id,
             guild_id
         )
-        .execute(&self.db.0)
+        .fetch_all(&self.db.0)
         .await
-        .map_err(db_err!("user_library.close_listen_events_for_track"))?;
+        .map_err(db_err!(
+            "user_library.close_listen_events_for_track_returning"
+        ))?;
 
-        Ok(result.rows_affected())
+        Ok(result.into_iter().map(|r| r.user_id).collect())
     }
 
     async fn recent_history(

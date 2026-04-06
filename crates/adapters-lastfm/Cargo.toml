@@ -1,0 +1,25 @@
+[package]
+name = "adapters-lastfm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+application = { path = "../application" }
+reqwest = { workspace = true, features = [
+    "json",
+    "rustls",
+    "http2",
+    "brotli",
+    "gzip",
+    "hickory-dns",
+    "zstd",
+] }
+governor = { workspace = true, features = ["std", "jitter", "quanta"] }
+nonzero_ext = { workspace = true }
+serde = { workspace = true, features = ["default", "derive"] }
+serde_json = { workspace = true, features = ["std"] }
+tokio = { workspace = true, features = ["rt"] }
+tracing = { workspace = true, features = ["default"] }
+thiserror = { workspace = true, features = ["default"] }
+async-trait = { workspace = true }

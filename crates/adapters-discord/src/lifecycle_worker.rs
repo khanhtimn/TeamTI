@@ -13,13 +13,16 @@ use adapters_voice::state_map::GuildStateMap;
 use adapters_voice::track_event_handler::post_now_playing;
 use application::RADIO_BATCH_SIZE;
 use application::ports::recommendation::RecommendationPort;
+use application::ports::repository::TrackRepository;
 use application::ports::user_library::UserLibraryPort;
+use domain::analysis::MoodWeight;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_lifecycle_worker(
     mut rx: TrackLifecycleRx,
     user_library_port: Arc<dyn UserLibraryPort>,
     recommendation_port: Arc<dyn RecommendationPort>,
+    track_repo: Arc<dyn TrackRepository>,
     guild_state: Arc<GuildStateMap>,
     songbird: Arc<songbird::Songbird>,
     http: Arc<serenity::all::Http>,
@@ -61,9 +64,8 @@ pub async fn run_lifecycle_worker(
             } => {
                 let track_dur = track_duration_ms.unwrap_or(0);
 
-                // Also close any dangling events for this track in this guild
                 let guild_id_str = guild_id.to_string();
-                if let Err(e) = user_library_port
+                match user_library_port
                     .close_listen_events_for_track(
                         track_id,
                         &guild_id_str,
@@ -72,12 +74,23 @@ pub async fn run_lifecycle_worker(
                     )
                     .await
                 {
-                    tracing::warn!(
-                        track_id = %track_id,
-                        error = %e,
-                        operation = "lifecycle.close_listen_events_bulk",
-                        "failed to close dangling listen events"
-                    );
+                    Ok(user_ids) => {
+                        for user_id in user_ids {
+                            let _ = lifecycle_tx.send(TrackLifecycleEvent::AffinityUpdate {
+                                guild_id,
+                                user_id,
+                                track_id,
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            track_id = %track_id,
+                            error = %e,
+                            operation = "lifecycle.close_listen_events_bulk",
+                            "failed to close dangling listen events"
+                        );
+                    }
                 }
             }
 
@@ -103,8 +116,31 @@ pub async fn run_lifecycle_worker(
                     })
                     .unwrap_or_default();
 
+                // Get seed vector + user centroid for mood-aware recommendations
+                let seed_vector = if let Some(sid) = seed_track_id {
+                    recommendation_port
+                        .get_bliss_vector(sid)
+                        .await
+                        .ok()
+                        .flatten()
+                } else {
+                    None
+                };
+                let mood_weight = if let Some(ref vector) = seed_vector {
+                    mood_weight_for_track(vector)
+                } else {
+                    MoodWeight::BALANCED
+                };
+
                 match recommendation_port
-                    .recommend(&user_id, seed_track_id, &exclude, RADIO_BATCH_SIZE)
+                    .recommend(
+                        &user_id,
+                        seed_track_id,
+                        seed_vector,
+                        mood_weight,
+                        &exclude,
+                        RADIO_BATCH_SIZE,
+                    )
                     .await
                 {
                     Ok(tracks) if !tracks.is_empty() => {
@@ -195,6 +231,56 @@ pub async fn run_lifecycle_worker(
                     }
                 }
             }
+
+            TrackLifecycleEvent::AffinityUpdate {
+                guild_id,
+                user_id,
+                track_id,
+            } => {
+                // Update genre stats
+                if let Ok(Some(track)) = track_repo.find_by_id(track_id).await
+                    && let Some(ref genres) = track.genres
+                    && let Err(e) = recommendation_port
+                        .update_genre_stats(&user_id, genres)
+                        .await
+                {
+                    tracing::debug!(
+                        user_id,
+                        error = %e,
+                        operation = "lifecycle.genre_stats",
+                        "failed to update genre stats"
+                    );
+                }
+
+                // Update guild track popularity
+                let guild_id_str = guild_id.to_string();
+                if let Err(e) = recommendation_port
+                    .update_guild_track_stats(&guild_id_str, track_id)
+                    .await
+                {
+                    tracing::debug!(
+                        track_id = %track_id,
+                        error = %e,
+                        operation = "lifecycle.guild_stats",
+                        "failed to update guild track stats"
+                    );
+                }
+
+                // Refresh affinities (non-blocking, non-fatal)
+                if let Err(e) = recommendation_port.refresh_affinities(&user_id, 200).await {
+                    tracing::debug!(
+                        user_id,
+                        error = %e,
+                        operation = "lifecycle.refresh_affinities",
+                        "failed to refresh affinities"
+                    );
+                }
+            }
         }
     }
+}
+// TODO: verify bliss v2 feature vector indices before enabling
+// mood-aware weighting. Defaulting to BALANCED until confirmed.
+fn mood_weight_for_track(_bliss_vector: &[f32]) -> MoodWeight {
+    MoodWeight::BALANCED
 }

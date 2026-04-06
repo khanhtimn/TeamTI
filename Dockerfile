@@ -3,7 +3,7 @@ FROM rustlang/rust:nightly-bookworm AS chef
 
 RUN cargo install cargo-chef --locked
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cmake pkg-config libopus-dev libssl-dev mold \
+    cmake pkg-config libopus-dev libssl-dev mold clang libclang-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

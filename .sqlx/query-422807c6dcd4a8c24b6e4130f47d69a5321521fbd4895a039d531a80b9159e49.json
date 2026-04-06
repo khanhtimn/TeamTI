@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET analysis_status  = 'done',\n                analysis_locked  = false,\n                analyzed_at      = now(),\n                bliss_vector     = $2,\n                updated_at       = now()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "vector",
+            "kind": "Simple"
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "422807c6dcd4a8c24b6e4130f47d69a5321521fbd4895a039d531a80b9159e49"
+}

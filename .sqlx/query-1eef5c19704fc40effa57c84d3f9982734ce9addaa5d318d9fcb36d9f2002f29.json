@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO similar_artists (source_mbid, similar_mbid, similarity_score)\n                VALUES ($1, $2, $3)\n                ON CONFLICT (source_mbid, similar_mbid)\n                DO UPDATE SET similarity_score = EXCLUDED.similarity_score,\n                             fetched_at = now()\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Float4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1eef5c19704fc40effa57c84d3f9982734ce9addaa5d318d9fcb36d9f2002f29"
+}

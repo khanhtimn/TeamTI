@@ -6,7 +6,7 @@ authors.workspace = true
 
 [dependencies]
 uuid = { workspace = true, features = ["v4", "serde", "fast-rng"] }
-chrono = { workspace = true, features = ["serde"] }
-serde = { workspace = true, features = ["derive"] }
+chrono = { workspace = true, features = ["default", "serde"] }
+serde = { workspace = true, features = ["default", "derive"] }
 sqlx = { workspace = true, features = ["derive", "postgres"] }
-thiserror.workspace = true
+thiserror = { workspace = true, features = ["default"] }

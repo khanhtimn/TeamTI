@@ -9,10 +9,10 @@ application = { path = "../application" }
 governor = { workspace = true, features = ["std", "quanta"] }
 nonzero_ext.workspace = true
 reqwest = { workspace = true, features = ["json", "rustls", "http2", "brotli", "gzip", "hickory-dns", "zstd"] }
-chrono = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
+chrono = { workspace = true, features = ["default", "serde"] }
+serde = { workspace = true, features = ["default", "derive"] }
+serde_json = { workspace = true, features = ["default"] }
 tokio = { workspace = true }
-tracing = { workspace = true }
-thiserror = { workspace = true }
+tracing = { workspace = true, features = ["default"] }
+thiserror = { workspace = true, features = ["default"] }
 async-trait = { workspace = true }

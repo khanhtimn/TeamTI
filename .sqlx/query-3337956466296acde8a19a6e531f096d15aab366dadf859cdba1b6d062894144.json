@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH new_centroid AS (\n                SELECT avg(t.bliss_vector)::vector(23) AS centroid\n                FROM (\n                    SELECT DISTINCT track_id FROM listen_events\n                    WHERE user_id = $1 AND completed = true\n                    UNION\n                    SELECT track_id FROM favorites WHERE user_id = $1\n                ) user_tracks\n                JOIN tracks t ON t.id = user_tracks.track_id\n                WHERE t.bliss_vector IS NOT NULL\n            )\n            INSERT INTO user_acoustic_centroids (user_id, centroid, computed_at)\n            SELECT $1, nc.centroid, now()\n            FROM new_centroid nc\n            WHERE nc.centroid IS NOT NULL\n            ON CONFLICT (user_id) DO UPDATE\n            SET centroid = EXCLUDED.centroid, computed_at = EXCLUDED.computed_at\n            RETURNING centroid as \"centroid: pgvector::Vector\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "centroid: pgvector::Vector",
+        "type_info": {
+          "Custom": {
+            "name": "vector",
+            "kind": "Simple"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "3337956466296acde8a19a6e531f096d15aab366dadf859cdba1b6d062894144"
+}

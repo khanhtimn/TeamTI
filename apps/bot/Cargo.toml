@@ -16,6 +16,8 @@ adapters-musicbrainz = { path = "../../crates/adapters-musicbrainz" }
 adapters-cover-art = { path = "../../crates/adapters-cover-art" }
 adapters-lyrics = { path = "../../crates/adapters-lyrics" }
 adapters-search = { path = "../../crates/adapters-search" }
+adapters-analysis = { path = "../../crates/adapters-analysis" }
+adapters-lastfm = { path = "../../crates/adapters-lastfm" }
 shared-config = { path = "../../crates/shared-config" }
 shared-observability = { path = "../../crates/shared-observability" }
 dashmap = { workspace = true, features = ["inline"] }
@@ -23,7 +25,7 @@ dashmap = { workspace = true, features = ["inline"] }
 tokio = { workspace = true, features = ["full"] }
 serenity = { workspace = true, features = ["gateway", "rustls_backend", "model", "cache", "voice"] }
 songbird = { workspace = true, features = ["driver", "rustls", "serenity", "builtin-queue", "tungstenite", "gateway"] }
-tracing.workspace = true
+tracing = { workspace = true, features = ["default"] }
 dotenvy.workspace = true
 symphonia = { workspace = true, features = ["mp3", "aac", "isomp4", "alac", "ogg", "vorbis", "wav", "flac"] }
 rustls = { workspace = true, features = ["ring", "std"] }

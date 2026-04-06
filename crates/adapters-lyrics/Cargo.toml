@@ -10,13 +10,13 @@ application = { path = "../application" }
 
 # Error Handling & Async
 async-trait = { workspace = true }
-thiserror = { workspace = true }
+thiserror = { workspace = true, features = ["default"] }
 tokio = { workspace = true, features = ["fs", "io-util"] }
 governor = { workspace = true, features = ["std", "quanta"] }
 nonzero_ext.workspace = true
-tracing = { workspace = true }
+tracing = { workspace = true, features = ["default"] }
 
 # Web / API
 reqwest = { workspace = true, features = ["json", "rustls", "http2", "brotli", "gzip", "hickory-dns", "zstd"] }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
+serde = { workspace = true, features = ["default", "derive"] }
+serde_json = { workspace = true, features = ["default"] }

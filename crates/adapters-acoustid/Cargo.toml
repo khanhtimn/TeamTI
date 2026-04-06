@@ -10,9 +10,9 @@ domain = { path = "../domain" }
 reqwest = { workspace = true, features = ["json", "rustls", "form", "http2", "brotli", "gzip", "hickory-dns", "zstd"] }
 governor = { workspace = true, features = ["std", "quanta"] }
 nonzero_ext.workspace = true
-serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
+serde = { workspace = true, features = ["default", "derive"] }
+serde_json = { workspace = true, features = ["default"] }
 tokio = { workspace = true, features = ["sync"] }
-tracing = { workspace = true }
-thiserror = { workspace = true }
+tracing = { workspace = true, features = ["default"] }
+thiserror = { workspace = true, features = ["default"] }
 async-trait = { workspace = true }

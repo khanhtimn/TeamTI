@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE tracks\n            SET enrichment_status = 'enriching', updated_at = now()\n            WHERE id = $1 AND enrichment_status = 'pending'\n            RETURNING\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at",
+  "query": "\n            SELECT \n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: _\", \n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,\n                analysis_status as \"analysis_status: _\", \n                analysis_attempts, analysis_locked, analyzed_at\n            FROM tracks t\n            JOIN UNNEST($1::text[]) AS u(loc) ON t.blob_location = u.loc\n            ",
   "describe": {
     "columns": [
       {
@@ -115,7 +115,7 @@
       },
       {
         "ordinal": 22,
-        "name": "enrichment_status: EnrichmentStatus",
+        "name": "enrichment_status: _",
         "type_info": "Text"
       },
       {
@@ -152,11 +152,31 @@
         "ordinal": 29,
         "name": "tags_written_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 30,
+        "name": "analysis_status: _",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 31,
+        "name": "analysis_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 32,
+        "name": "analysis_locked",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 33,
+        "name": "analyzed_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "TextArray"
       ]
     },
     "nullable": [
@@ -189,8 +209,12 @@
       true,
       false,
       false,
+      true,
+      false,
+      false,
+      false,
       true
     ]
   },
-  "hash": "c018b9d9dad6651045d5e699f53197abd8a65e9c358ffdc4b44c3c899b7eff39"
+  "hash": "2c0b422631a51f561396de1b423a370b2ad1c01d98e3a018dd917291132e36f5"
 }

@@ -138,6 +138,10 @@ pub async fn run_fingerprint_worker(
                                 created_at: chrono::Utc::now(),
                                 updated_at: chrono::Utc::now(),
                                 tags_written_at: None,
+                                analysis_status: Default::default(),
+                                analysis_attempts: 0,
+                                analysis_locked: false,
+                                analyzed_at: None,
                             };
 
                             match repo.insert(&track).await {

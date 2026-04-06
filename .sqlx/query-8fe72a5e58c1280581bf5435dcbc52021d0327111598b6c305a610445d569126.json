@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at\n            FROM tracks WHERE id = $1 LIMIT 1",
+  "query": "SELECT\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,\n                analysis_status as \"analysis_status: domain::AnalysisStatus\",\n                analysis_attempts, analysis_locked, analyzed_at\n            FROM tracks WHERE blob_location = $1 LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -152,11 +152,31 @@
         "ordinal": 29,
         "name": "tags_written_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 30,
+        "name": "analysis_status: domain::AnalysisStatus",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 31,
+        "name": "analysis_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 32,
+        "name": "analysis_locked",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 33,
+        "name": "analyzed_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -189,8 +209,12 @@
       true,
       false,
       false,
+      true,
+      false,
+      false,
+      false,
       true
     ]
   },
-  "hash": "50c8510ec5f27476f84d072af9c220e850815eb6a4764fb219457a09ea45a894"
+  "hash": "8fe72a5e58c1280581bf5435dcbc52021d0327111598b6c305a610445d569126"
 }

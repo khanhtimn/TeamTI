@@ -69,8 +69,26 @@ CREATE TABLE IF NOT EXISTS tracks (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 
-    -- search_text and search_vector generated columns removed in v3.
-    -- Full-text search is handled by adapters-search (Tantivy).
+
+    -- ── Audio analysis (bliss-audio) ──────────────────────────────────
+    -- Mirrors the enrichment_status pattern for traceability.
+    -- analysis_status = 'pending'    → not yet analysed
+    --                  'processing'  → currently locked by analysis worker
+    --                  'done'        → bliss_vector is populated
+    --                  'failed'      → analysis attempt failed (file unreadable, decode error)
+    -- Triggers on all tracks regardless of enrichment_status.
+    , analysis_status   TEXT NOT NULL DEFAULT 'pending'
+                          CHECK (analysis_status IN ('pending', 'processing', 'done', 'failed'))
+    , analysis_attempts INTEGER NOT NULL DEFAULT 0
+    , analysis_locked   BOOLEAN NOT NULL DEFAULT false
+    , analyzed_at       TIMESTAMPTZ
+
+    -- 23-dimensional bliss-audio feature vector (Euclidean distance space).
+    -- Dimension verified at compile time via bliss_audio::NUMBER_FEATURES.
+    -- Version2 (LATEST) uses 23 features.
+    -- NULL until analysis_status = 'done'.
+    -- Query with: ORDER BY bliss_vector <-> $seed_vector (L2 distance)
+    , bliss_vector      vector(23)
 );
 
 CREATE TABLE IF NOT EXISTS track_artists (

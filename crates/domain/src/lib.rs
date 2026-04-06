@@ -1,4 +1,5 @@
 pub mod album;
+pub mod analysis;
 pub mod artist;
 pub mod enrichment;
 pub mod track;
@@ -11,6 +12,7 @@ pub mod media;
 pub mod playback;
 
 pub use album::Album;
+pub use analysis::{AnalysisStatus, MoodWeight};
 pub use artist::{AlbumArtist, Artist, ArtistRole, TrackArtist};
 pub use enrichment::EnrichmentStatus;
 pub use track::Track;

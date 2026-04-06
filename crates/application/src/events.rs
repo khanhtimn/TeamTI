@@ -48,6 +48,25 @@ pub struct ToMusicBrainz {
 }
 
 /// Emitted by MusicBrainz Worker after metadata is written to DB.
+/// Consumed by Last.fm Worker (Pass 4 — inserted between MB and Lyrics).
+#[derive(Debug, Clone)]
+pub struct ToLastFm {
+    // All fields needed by downstream ToLyrics (pass-through):
+    pub track_id: Uuid,
+    pub release_mbid: String,
+    pub album_dir: Option<String>,
+    pub blob_location: String,
+    pub enrichment_attempts: i32,
+    pub correlation_id: Uuid,
+    pub track_name: String,
+    pub artist_name: String,
+    pub album_name: Option<String>,
+    pub duration_secs: u32,
+    // Pass 4: artist MBIDs from track_artists for Last.fm lookup
+    pub artist_mbids: Vec<String>,
+}
+
+/// Emitted by Last.fm Worker (or MusicBrainz Worker on failure fallback).
 /// Consumed by Lyrics Worker.
 #[derive(Debug, Clone)]
 pub struct ToLyrics {

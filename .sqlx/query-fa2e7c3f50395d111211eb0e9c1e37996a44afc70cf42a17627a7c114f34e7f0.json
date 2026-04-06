@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET analysis_status   = 'failed',\n                analysis_locked   = false,\n                analysis_attempts = analysis_attempts + 1,\n                updated_at        = now()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa2e7c3f50395d111211eb0e9c1e37996a44afc70cf42a17627a7c114f34e7f0"
+}

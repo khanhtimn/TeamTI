@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg18-trixie
     container_name: teamti-db
     restart: unless-stopped
     environment:
@@ -43,10 +43,16 @@ services:
       FAILED_RETRY_LIMIT: ${FAILED_RETRY_LIMIT:-5}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
       AUTO_LEAVE_SECS: ${AUTO_LEAVE_SECS:-30}
+      TANTIVY_INDEX_PATH: ${TANTIVY_INDEX_PATH:-/app/tantivy_index}
+      LASTFM_API_KEY: ${LASTFM_API_KEY}
+      ANALYSIS_CONCURRENCY: ${ANALYSIS_CONCURRENCY:-4}
+      ANALYSIS_POLL_SECS: ${ANALYSIS_POLL_SECS:-30}
       RUST_LOG: ${RUST_LOG:-info,teamti=debug}
       LOG_FORMAT: ${LOG_FORMAT:-pretty}
     volumes:
       - ${MEDIA_ROOT:-./media_data}:/app/media_data:ro
+      - tantivy_data:/app/tantivy_index
 
 volumes:
   pgdata:
+  tantivy_data:

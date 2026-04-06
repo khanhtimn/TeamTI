@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::EnrichmentStatus;
+use crate::analysis::AnalysisStatus;
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Track {
@@ -47,6 +48,16 @@ pub struct Track {
     /// Pass 4: records when enriched tags were written back to the audio file.
     /// NULL = not yet written (or re-enriched since last write).
     pub tags_written_at: Option<DateTime<Utc>>,
+
+    // ── Audio analysis (bliss-audio) ──────────────────────────────────
+    /// Analysis pipeline state — mirrors enrichment_status pattern.
+    pub analysis_status: AnalysisStatus,
+    pub analysis_attempts: i32,
+    pub analysis_locked: bool,
+    pub analyzed_at: Option<DateTime<Utc>>,
+    // NOTE: bliss_vector is NOT stored in the domain Track.
+    // It's only accessed via persistence-layer queries (pgvector).
+
     // NOTE (v3): search_text and search_vector generated columns removed.
     // Full-text search is handled by adapters-search (Tantivy).
 }

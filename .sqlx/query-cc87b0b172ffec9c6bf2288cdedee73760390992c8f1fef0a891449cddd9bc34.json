@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO user_genre_stats (user_id, genre, play_count, period_start, period_end)\n                VALUES (\n                    $1, $2, 1,\n                    date_trunc('month', now()),\n                    date_trunc('month', now()) + INTERVAL '1 month'\n                )\n                ON CONFLICT (user_id, genre, period_start)\n                DO UPDATE SET play_count = user_genre_stats.play_count + 1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc87b0b172ffec9c6bf2288cdedee73760390992c8f1fef0a891449cddd9bc34"
+}

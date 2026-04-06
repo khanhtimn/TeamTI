@@ -115,7 +115,14 @@ pub async fn autocomplete(
             let remaining = 25 - choices.len();
 
             if let Ok(recs) = recommendation_port
-                .recommend(&user_id, None, &exclude_ids, remaining)
+                .recommend(
+                    &user_id,
+                    None,
+                    None,
+                    Default::default(),
+                    &exclude_ids,
+                    remaining,
+                )
                 .await
             {
                 for r in &recs {

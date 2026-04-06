@@ -9,6 +9,6 @@ shared-config = { path = "../shared-config" }
 tokio = { workspace = true }
 notify = { workspace = true, features = ["macos_fsevent"] }
 notify-debouncer-full.workspace = true
-tracing.workspace = true
-thiserror.workspace = true
+tracing = { workspace = true, features = ["default"] }
+thiserror = { workspace = true, features = ["default"] }
 application = { version = "0.1.0", path = "../application" }

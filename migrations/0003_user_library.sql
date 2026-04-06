@@ -52,3 +52,57 @@ CREATE TABLE IF NOT EXISTS playlist_collaborators (
     added_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (playlist_id, user_id)
 );
+
+-- ── Last.fm artist similarity cache ───────────────────────────
+-- Populated once per artist at enrichment time by LastFmWorker.
+-- Never populated at recommendation time — no live API calls in hot path.
+-- source_mbid and similar_mbid are MusicBrainz Artist IDs.
+-- An artist pair is stored even if similar_mbid is not yet in our artists table.
+CREATE TABLE IF NOT EXISTS similar_artists (
+    source_mbid      TEXT NOT NULL,
+    similar_mbid     TEXT NOT NULL,
+    similarity_score REAL NOT NULL CHECK (similarity_score >= 0 AND similarity_score <= 1),
+    fetched_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_mbid, similar_mbid)
+);
+
+-- ── Materialized user-track affinities ────────────────────────
+-- Top-K tracks recommended for each user, with decomposed signal scores.
+-- Decomposed scores allow reweighting without recomputing raw signals.
+-- Populated/updated eagerly on listen completion and favourite events.
+-- track_id is a track the user has NOT yet heard (or rarely heard),
+-- scored as a recommendation candidate.
+CREATE TABLE IF NOT EXISTS user_track_affinities (
+    user_id          TEXT NOT NULL,
+    track_id         UUID NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    favourites_score REAL NOT NULL DEFAULT 0,   -- similarity to user's favourites centroid
+    acoustic_score   REAL NOT NULL DEFAULT 0,   -- similarity to user's taste centroid vector
+    taste_score      REAL NOT NULL DEFAULT 0,   -- genre + artist affinity from listen history
+    lastfm_score     REAL NOT NULL DEFAULT 0,   -- similar_artists graph proximity
+    combined_score   REAL NOT NULL DEFAULT 0,   -- weighted blend (updated with weights)
+    computed_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, track_id)
+);
+
+-- ── Web portal: top genres per user per period ────────────────
+-- Populated/updated on listen event close.
+-- period_start / period_end define the time window (e.g., current calendar month).
+CREATE TABLE IF NOT EXISTS user_genre_stats (
+    user_id      TEXT NOT NULL,
+    genre        TEXT NOT NULL,
+    play_count   INTEGER NOT NULL DEFAULT 0,
+    period_start TIMESTAMPTZ NOT NULL,
+    period_end   TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (user_id, genre, period_start)
+);
+
+-- ── Web portal: server-wide track popularity ──────────────────
+-- Populated/updated on listen event close (completed = true only).
+CREATE TABLE IF NOT EXISTS guild_track_stats (
+    guild_id     TEXT NOT NULL,
+    track_id     UUID NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    play_count   INTEGER NOT NULL DEFAULT 0,
+    period_start TIMESTAMPTZ NOT NULL,
+    period_end   TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (guild_id, track_id, period_start)
+);

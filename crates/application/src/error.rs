@@ -202,6 +202,20 @@ pub enum AppError {
         kind: TagWriteErrorKind,
     },
 
+    // ── Analysis ──────────────────────────────────────────────────────────
+    #[error("audio analysis error ({kind}): {detail}")]
+    Analysis {
+        kind: AnalysisErrorKind,
+        detail: String,
+    },
+
+    // ── Last.fm ──────────────────────────────────────────────────────────
+    #[error("last.fm error ({kind}): {detail}")]
+    LastFm {
+        kind: LastFmErrorKind,
+        detail: String,
+    },
+
     // ── Playlist ──────────────────────────────────────────────────────────
     #[error("playlist error ({kind}): {detail}")]
     Playlist {
@@ -304,6 +318,30 @@ pub enum TagWriteErrorKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum AnalysisErrorKind {
+    #[error("file not found")]
+    FileNotFound,
+    #[error("decode failed")]
+    DecodeFailed,
+    #[error("task panicked")]
+    TaskPanicked,
+    #[error("vector store failed")]
+    StoreFailed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum LastFmErrorKind {
+    #[error("api error")]
+    ApiError,
+    #[error("not found")]
+    NotFound,
+    #[error("rate limited")]
+    RateLimited,
+    #[error("response invalid")]
+    InvalidResponse,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum PlaylistErrorKind {
     #[error("not found")]
     NotFound,
@@ -381,6 +419,18 @@ impl AppError {
             AppError::Fingerprint { .. } => "fingerprint",
             AppError::TagRead { .. } => "tag_read",
             AppError::TagWrite { .. } => "tag_write",
+            AppError::Analysis { kind, .. } => match kind {
+                AnalysisErrorKind::FileNotFound => "analysis.file_not_found",
+                AnalysisErrorKind::DecodeFailed => "analysis.decode_failed",
+                AnalysisErrorKind::TaskPanicked => "analysis.task_panicked",
+                AnalysisErrorKind::StoreFailed => "analysis.store_failed",
+            },
+            AppError::LastFm { kind, .. } => match kind {
+                LastFmErrorKind::ApiError => "lastfm.api_error",
+                LastFmErrorKind::NotFound => "lastfm.not_found",
+                LastFmErrorKind::RateLimited => "lastfm.rate_limited",
+                LastFmErrorKind::InvalidResponse => "lastfm.invalid_response",
+            },
             AppError::Playlist { kind, .. } => match kind {
                 PlaylistErrorKind::NotFound => "playlist.not_found",
                 PlaylistErrorKind::Forbidden => "playlist.forbidden",
@@ -445,6 +495,13 @@ impl Retryable for AppError {
             AppError::Search { kind, .. } => matches!(
                 kind,
                 SearchErrorKind::WriteFailed | SearchErrorKind::ReadFailed
+            ),
+
+            // Analysis/LastFm — non-fatal, not retryable in enrichment context
+            AppError::Analysis { .. } => false,
+            AppError::LastFm { kind, .. } => matches!(
+                kind,
+                LastFmErrorKind::RateLimited | LastFmErrorKind::ApiError
             ),
 
             // Domain errors — not retryable

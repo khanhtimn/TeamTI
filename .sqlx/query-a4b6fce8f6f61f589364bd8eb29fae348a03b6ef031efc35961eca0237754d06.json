@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at\n            FROM tracks\n            WHERE enrichment_status = 'done' AND tags_written_at IS NULL\n            ORDER BY updated_at ASC LIMIT $1",
+  "query": "UPDATE tracks\n            SET analysis_status = 'processing', analysis_locked = true, updated_at = now()\n            WHERE id IN (\n                SELECT id FROM tracks\n                WHERE analysis_locked = false\n                  AND analysis_status IN ('pending', 'failed')\n                  AND analysis_attempts < 3\n                ORDER BY created_at ASC\n                LIMIT $1\n                FOR UPDATE SKIP LOCKED\n            )\n            RETURNING\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,\n                analysis_status as \"analysis_status: domain::AnalysisStatus\",\n                analysis_attempts, analysis_locked, analyzed_at",
   "describe": {
     "columns": [
       {
@@ -152,6 +152,26 @@
         "ordinal": 29,
         "name": "tags_written_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 30,
+        "name": "analysis_status: domain::AnalysisStatus",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 31,
+        "name": "analysis_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 32,
+        "name": "analysis_locked",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 33,
+        "name": "analyzed_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -189,8 +209,12 @@
       true,
       false,
       false,
+      true,
+      false,
+      false,
+      false,
       true
     ]
   },
-  "hash": "3f54529bb8c6b78b2519e1e020b299e6bd0100beae6fb10bfd8c540fc335d0d6"
+  "hash": "a4b6fce8f6f61f589364bd8eb29fae348a03b6ef031efc35961eca0237754d06"
 }

@@ -102,6 +102,42 @@ pub trait TrackRepository: Send + Sync {
 
     /// Fetch all track credits (composers and lyricists) in a single query.
     async fn get_credits(&self, track_id: Uuid) -> Result<TrackCredits, AppError>;
+
+    // ── Analysis worker methods ───────────────────────────────────────
+
+    /// Atomically claim tracks for analysis (FOR UPDATE SKIP LOCKED).
+    async fn claim_for_analysis(&self, limit: i64) -> Result<Vec<Track>, AppError>;
+
+    /// Unlock stuck analysis rows from previous crashed sessions.
+    async fn unlock_stale_analysis_rows(
+        &self,
+        older_than: std::time::Duration,
+    ) -> Result<u64, AppError>;
+
+    /// Mark a track's analysis as done with the computed bliss vector.
+    async fn update_analysis_done(
+        &self,
+        track_id: Uuid,
+        bliss_vector: &[f32],
+    ) -> Result<(), AppError>;
+
+    /// Mark a track's analysis as failed and increment attempts.
+    async fn update_analysis_failed(&self, track_id: Uuid) -> Result<(), AppError>;
+
+    /// Startup watchdog: reset stale 'processing' analysis rows to 'pending'.
+    async fn reset_stale_analyzing(&self) -> Result<u64, AppError>;
+
+    // ── Last.fm similarity cache ──────────────────────────────────────
+
+    /// Check which artist MBIDs are already cached in similar_artists
+    async fn get_cached_similar_artists(&self, mbids: &[String]) -> Result<Vec<String>, AppError>;
+
+    /// Bulk upsert similar artist relationships from Last.fm.
+    async fn upsert_similar_artists(
+        &self,
+        source_mbid: &str,
+        similar: &[crate::ports::lastfm::SimilarArtist],
+    ) -> Result<(), AppError>;
 }
 
 /// Consolidated track credits.
