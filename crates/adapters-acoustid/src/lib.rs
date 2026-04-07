@@ -83,10 +83,16 @@ impl AcoustIdPort for AcoustIdAdapter {
             });
         }
 
-        let body: AcoustIdResponse = resp.json().await.map_err(|e| AppError::AcoustId {
+        let body_text = resp.text().await.map_err(|e| AppError::AcoustId {
             kind: AcoustIdErrorKind::InvalidResponse,
-            detail: format!("AcoustID parse error: {e}"),
+            detail: format!("failed to read AcoustID response body: {e}"),
         })?;
+
+        let body: AcoustIdResponse =
+            serde_json::from_str(&body_text).map_err(|e| AppError::AcoustId {
+                kind: AcoustIdErrorKind::InvalidResponse,
+                detail: format!("AcoustID JSON parse error: {e} — body: {body_text}",),
+            })?;
 
         if body.status != "ok" {
             return Err(AppError::AcoustId {

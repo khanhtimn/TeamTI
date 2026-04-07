@@ -45,23 +45,42 @@ pub async fn run(
         return;
     }
 
-    // Shuffle positions 1..end using Fisher-Yates
-    let mut tail: Vec<_> = state.meta_queue.drain(1..).collect();
-    fastrand::shuffle(&mut tail);
-    for t in tail {
-        state.meta_queue.push_back(t);
+    // Shuffle positions 1..end using a shared index permutation.
+    // meta_queue is the source of truth; Songbird is reordered to match.
+    let tail: Vec<_> = state.meta_queue.drain(1..).collect();
+    let original_len = tail.len();
+
+    // Build a single shuffled index permutation
+    let mut indices: Vec<usize> = (0..original_len).collect();
+    fastrand::shuffle(&mut indices);
+
+    // Rebuild meta_queue tail in the shuffled order
+    // Use Options to move items without Clone issues
+    let mut opts: Vec<_> = tail.into_iter().map(Some).collect();
+    for &old_pos in &indices {
+        if let Some(item) = opts[old_pos].take() {
+            state.meta_queue.push_back(item);
+        }
     }
     drop(state);
 
-    // Reorder Songbird's queue to match
+    // Apply the same permutation to Songbird's queue
     if let Some(handler_lock) = songbird.get(guild_id) {
         let handler = handler_lock.lock().await;
         handler.queue().modify_queue(|q| {
             if q.len() > 1 {
-                let mut tail: Vec<_> = q.drain(1..).collect();
-                fastrand::shuffle(&mut tail);
-                for t in tail {
-                    q.push_back(t);
+                let mut sb_tail: Vec<_> = q.drain(1..).collect();
+                if sb_tail.len() == original_len {
+                    let mut sb_opts: Vec<_> = sb_tail.drain(..).map(Some).collect();
+                    for &old_pos in &indices {
+                        if let Some(item) = sb_opts[old_pos].take() {
+                            q.push_back(item);
+                        }
+                    }
+                } else {
+                    for item in sb_tail {
+                        q.push_back(item);
+                    }
                 }
             }
         });

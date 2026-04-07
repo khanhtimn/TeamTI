@@ -75,10 +75,14 @@ impl LastFmPort for LastFmAdapter {
             });
         }
 
+        let body_text = resp.text().await.map_err(|e| AppError::LastFm {
+            kind: LastFmErrorKind::InvalidResponse,
+            detail: format!("failed to read Last.fm response body: {e}"),
+        })?;
         let body: response::SimilarArtistsResponse =
-            resp.json().await.map_err(|e| AppError::LastFm {
+            serde_json::from_str(&body_text).map_err(|e| AppError::LastFm {
                 kind: LastFmErrorKind::InvalidResponse,
-                detail: format!("Last.fm parse error: {e}"),
+                detail: format!("Last.fm JSON parse error: {e} — body: {body_text}"),
             })?;
 
         let similar = body

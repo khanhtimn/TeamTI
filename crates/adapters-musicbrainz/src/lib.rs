@@ -90,10 +90,15 @@ impl MusicBrainzPort for MusicBrainzAdapter {
             });
         }
 
-        let body: MbRecordingResponse = resp.json().await.map_err(|e| AppError::MusicBrainz {
+        let body_text = resp.text().await.map_err(|e| AppError::MusicBrainz {
             kind: MusicBrainzErrorKind::InvalidResponse,
-            detail: format!("MusicBrainz parse error: {e}"),
+            detail: format!("failed to read MusicBrainz response body: {e}"),
         })?;
+        let body: MbRecordingResponse =
+            serde_json::from_str(&body_text).map_err(|e| AppError::MusicBrainz {
+                kind: MusicBrainzErrorKind::InvalidResponse,
+                detail: format!("MusicBrainz JSON parse error: {e} — body: {body_text}",),
+            })?;
 
         // B4 fix: select the most relevant release by priority.
         // Prefer official studio albums over compilations/bootlegs.
@@ -220,10 +225,17 @@ impl MusicBrainzPort for MusicBrainzAdapter {
             });
         }
 
+        let body_text = resp.text().await.map_err(|e| AppError::MusicBrainz {
+            kind: MusicBrainzErrorKind::InvalidResponse,
+            detail: format!("failed to read MusicBrainz response body: {e}"),
+        })?;
         let body: response::MbWorkResponse =
-            resp.json().await.map_err(|e| AppError::MusicBrainz {
+            serde_json::from_str(&body_text).map_err(|e| AppError::MusicBrainz {
                 kind: MusicBrainzErrorKind::InvalidResponse,
-                detail: format!("MusicBrainz parse error: {e}"),
+                detail: format!(
+                    "MusicBrainz JSON parse error: {e} — raw body (first 500 chars): {}",
+                    &body_text[..body_text.len().min(500)]
+                ),
             })?;
 
         let mut composers = Vec::new();
@@ -283,10 +295,17 @@ impl MusicBrainzPort for MusicBrainzAdapter {
             });
         }
 
+        let body_text = resp.text().await.map_err(|e| AppError::MusicBrainz {
+            kind: MusicBrainzErrorKind::InvalidResponse,
+            detail: format!("failed to read MusicBrainz response body: {e}"),
+        })?;
         let body: response::MbReleaseResponse =
-            resp.json().await.map_err(|e| AppError::MusicBrainz {
+            serde_json::from_str(&body_text).map_err(|e| AppError::MusicBrainz {
                 kind: MusicBrainzErrorKind::InvalidResponse,
-                detail: format!("MusicBrainz parse error: {e}"),
+                detail: format!(
+                    "MusicBrainz JSON parse error: {e} — raw body (first 500 chars): {}",
+                    &body_text[..body_text.len().min(500)]
+                ),
             })?;
 
         let label_name = body

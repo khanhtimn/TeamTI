@@ -79,9 +79,11 @@ pub async fn run(
     }
 
     let removed = state.meta_queue.remove(pos).unwrap();
-    drop(state);
 
-    // Remove from Songbird's queue
+    // Remove from Songbird's queue while we still hold the state lock.
+    // These are Queued (not Playing) entries at pos > 0, so dropping
+    // them does NOT fire TrackEvent::End. We update meta_queue first
+    // to keep it as the source of truth.
     if let Some(handler_lock) = songbird.get(guild_id) {
         let handler = handler_lock.lock().await;
         handler.queue().modify_queue(|q| {
@@ -90,6 +92,8 @@ pub async fn run(
             }
         });
     }
+
+    drop(state);
 
     let _ = interaction
         .edit_response(

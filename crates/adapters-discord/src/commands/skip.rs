@@ -133,35 +133,21 @@ pub async fn run(
     if skip_to >= state.meta_queue.len() {
         // Skipping past the end — clear queue
         if state.meta_queue.len() <= 1 {
-            // Only 1 track (the current one), nothing to skip to
-            // Emit TrackEnded for the current track with actual play time
-            let current = state.meta_queue.front().cloned();
-            let play_ms = state.actual_play_ms();
-            if let Some(ref t) = current {
-                let _ =
-                    lifecycle_tx.send(adapters_voice::lifecycle::TrackLifecycleEvent::TrackEnded {
-                        guild_id,
-                        track_id: t.track_id,
-                        track_duration_ms: t.duration_ms,
-                        play_duration_ms: play_ms,
-                    });
-            }
-            state.meta_queue.clear();
+            // Only 1 track (the current one). Use skip() to trigger the
+            // normal TrackEventHandler flow which posts "Queue Ended",
+            // starts the auto-leave timer, and emits lifecycle events.
             state.cancel_np_update();
-            state.track_started_at = None;
-            state.paused_at = None;
-            state.total_paused_ms = 0;
             drop(state);
 
-            // Stop Songbird's queue
             if let Some(handler_lock) = songbird.get(guild_id) {
-                handler_lock.lock().await.queue().stop();
+                let handler = handler_lock.lock().await;
+                let _ = handler.queue().skip();
             }
 
             let _ = interaction
                 .edit_response(
                     http,
-                    EditInteractionResponse::new().content("Queue is empty after skip."),
+                    EditInteractionResponse::new().content("⏭ Skipped. No more tracks in queue."),
                 )
                 .await;
             return;
@@ -181,12 +167,29 @@ pub async fn run(
     let target_name = state.meta_queue[skip_to].title.clone();
 
     state.cancel_np_update();
+
+    // ── Drain intermediate tracks from meta_queue ourselves ─────────
+    // We remove positions 1..skip_to from meta_queue (the tracks between
+    // the currently-playing track and the skip target). We emit TrackEnded
+    // for each with zero play time so listen events are properly closed.
+    for _ in 1..skip_to {
+        if state.meta_queue.len() > 1 {
+            let skipped = state.meta_queue.remove(1).unwrap();
+            let _ = lifecycle_tx.send(adapters_voice::lifecycle::TrackLifecycleEvent::TrackEnded {
+                guild_id,
+                track_id: skipped.track_id,
+                track_duration_ms: skipped.duration_ms,
+                play_duration_ms: 0, // never played
+            });
+        }
+    }
     drop(state);
 
+    // Now remove the same intermediate entries from Songbird's queue.
+    // These are Queued (not Playing) entries so dropping them does NOT
+    // fire TrackEvent::End — only the Playing entry does on skip().
     if let Some(handler_lock) = songbird.get(guild_id) {
         let handler = handler_lock.lock().await;
-
-        // Remove tracks 1..skip_to to skip multiple tracks
         handler.queue().modify_queue(|q| {
             for _ in 1..skip_to {
                 if q.len() > 1 {
@@ -195,7 +198,9 @@ pub async fn run(
             }
         });
 
-        // Calling skip() triggers TrackEventHandler to advance the meta_queue smoothly
+        // skip() stops the currently-playing track (position 0), which
+        // fires exactly ONE TrackEvent::End → TrackEventHandler.act()
+        // pops position 0 from meta_queue and posts the new NP embed.
         let _ = handler.queue().skip();
     }
 

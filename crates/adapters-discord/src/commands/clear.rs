@@ -33,7 +33,7 @@ pub async fn run(
         return;
     };
 
-    let state = state_lock.lock().await;
+    let mut state = state_lock.lock().await;
 
     if state.meta_queue.len() <= 1 {
         let _ = interaction
@@ -47,9 +47,15 @@ pub async fn run(
 
     // Keep position 0 (currently playing), clear positions 1..end
     let cleared_count = state.meta_queue.len() - 1;
+
+    // Drain meta_queue ourselves — don't rely on Songbird event handlers
+    // which fire asynchronously and could pop the wrong entries.
+    state.meta_queue.truncate(1);
     drop(state);
 
-    // Remove from Songbird's queue (positions 1..end)
+    // Remove from Songbird's queue (positions 1..end).
+    // These are Queued (not Playing) entries — dropping them does NOT
+    // fire TrackEvent::End, but we drain meta_queue first to be safe.
     if let Some(handler_lock) = songbird.get(guild_id) {
         let handler = handler_lock.lock().await;
         handler.queue().modify_queue(|q| {

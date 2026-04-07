@@ -602,26 +602,46 @@ async fn handle_queue_shuffle(
     };
 
     let mut state = state_lock.lock().await;
-    if state.meta_queue.len() > 2 {
-        let mut tail: Vec<_> = state.meta_queue.drain(1..).collect();
-        fastrand::shuffle(&mut tail);
-        for t in tail {
-            state.meta_queue.push_back(t);
-        }
-    }
-    drop(state);
+    let original_len = state.meta_queue.len().saturating_sub(1);
+    if original_len > 1 {
+        let tail: Vec<_> = state.meta_queue.drain(1..).collect();
 
-    if let Some(handler_lock) = songbird.get(guild_id) {
-        let handler = handler_lock.lock().await;
-        handler.queue().modify_queue(|q| {
-            if q.len() > 1 {
-                let mut tail: Vec<_> = q.drain(1..).collect();
-                fastrand::shuffle(&mut tail);
-                for t in tail {
-                    q.push_back(t);
-                }
+        // Build a single shuffled index permutation
+        let mut indices: Vec<usize> = (0..original_len).collect();
+        fastrand::shuffle(&mut indices);
+
+        // Rebuild meta_queue tail in shuffled order
+        let mut opts: Vec<_> = tail.into_iter().map(Some).collect();
+        for &old_pos in &indices {
+            if let Some(item) = opts[old_pos].take() {
+                state.meta_queue.push_back(item);
             }
-        });
+        }
+        drop(state);
+
+        // Apply the same permutation to Songbird's queue
+        if let Some(handler_lock) = songbird.get(guild_id) {
+            let handler = handler_lock.lock().await;
+            handler.queue().modify_queue(|q| {
+                if q.len() > 1 {
+                    let mut sb_tail: Vec<_> = q.drain(1..).collect();
+                    if sb_tail.len() == original_len {
+                        let mut sb_opts: Vec<_> = sb_tail.drain(..).map(Some).collect();
+                        for &old_pos in &indices {
+                            if let Some(item) = sb_opts[old_pos].take() {
+                                q.push_back(item);
+                            }
+                        }
+                    } else {
+                        for item in sb_tail {
+                            q.push_back(item);
+                        }
+                    }
+                }
+            });
+        }
+    } else {
+        drop(state);
     }
 
     // Re-render
@@ -653,6 +673,12 @@ async fn handle_queue_clear(
         Some(s) => s.clone(),
         None => return,
     };
+
+    // Drain meta_queue first — source of truth
+    {
+        let mut state = state_lock.lock().await;
+        state.meta_queue.truncate(1);
+    }
 
     if let Some(handler_lock) = songbird.get(guild_id) {
         let handler = handler_lock.lock().await;

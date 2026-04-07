@@ -184,12 +184,27 @@ impl SongbirdEventHandler for TrackEventHandler {
                 });
             }
 
-            if state.text_channel_id.is_some() {
-                // Just clear the NP update state.
-                // The new NP message will be posted by the lifecycle worker responding to TrackStarted.
-                state.cancel_np_update();
-            } else {
-                drop(state);
+            // ── Retire the old NP message ─────────────────────────────
+            // Edit the old NP message to strip interactive buttons so
+            // it no longer looks "active". The lifecycle worker will post
+            // a brand-new NP message for the next track.
+            let old_msg_id = state.now_playing_msg.take();
+            let text_channel = state.text_channel_id;
+            drop(state);
+
+            if let (Some(channel_id), Some(msg_id)) = (text_channel, old_msg_id) {
+                // Build a minimal "finished" edit — strip components
+                let finished_embed = build_np_embed(Some(&finished_track), &GuildMusicState::new())
+                    .title("⏹  PLAYED")
+                    .color(0x0074_7F8D); // grey
+
+                let edit = serenity::builder::EditMessage::new()
+                    .embed(finished_embed)
+                    .components(vec![]);
+
+                let _ = edit
+                    .execute(&self.http, channel_id.into(), msg_id, None)
+                    .await;
             }
         }
 

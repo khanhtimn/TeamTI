@@ -376,10 +376,13 @@ pub async fn run(
             };
             let msg = if queue_pos == 1 {
                 format!("▶ Now playing **{}**", queued.title)
+            } else if queue_pos == 2 {
+                format!("✅ Added **{}** — up next", queued.title)
             } else {
                 format!(
-                    "✅ Added **{}** to the queue (position {})",
-                    queued.title, queue_pos
+                    "✅ Added **{}** — {} tracks away",
+                    queued.title,
+                    queue_pos - 1
                 )
             };
             let _ = interaction
