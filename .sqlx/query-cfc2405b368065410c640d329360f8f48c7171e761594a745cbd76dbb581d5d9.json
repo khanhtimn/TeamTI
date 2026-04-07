@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT pi.id AS item_id, pi.playlist_id, pi.track_id, pi.position,\n                    pi.added_by, pi.added_at,\n                    t.title, t.artist_display, a.title AS album_title,\n                    t.album_id, t.duration_ms, t.blob_location\n             FROM playlist_items pi\n             JOIN tracks t ON t.id = pi.track_id\n             LEFT JOIN albums a ON a.id = t.album_id\n             WHERE pi.playlist_id = $1\n             ORDER BY pi.position ASC, pi.added_at ASC\n             LIMIT $2 OFFSET $3",
+  "query": "SELECT pi.id AS item_id, pi.playlist_id, pi.track_id, pi.position,\n                    pi.added_by, pi.added_at,\n                    t.title, t.artist_display, a.title AS \"album_title?\",\n                    t.album_id, t.duration_ms, t.blob_location\n             FROM playlist_items pi\n             JOIN tracks t ON t.id = pi.track_id\n             LEFT JOIN albums a ON a.id = t.album_id\n             WHERE pi.playlist_id = $1\n             ORDER BY pi.position ASC, pi.added_at ASC\n             LIMIT $2 OFFSET $3",
   "describe": {
     "columns": [
       {
@@ -45,7 +45,7 @@
       },
       {
         "ordinal": 8,
-        "name": "album_title",
+        "name": "album_title?",
         "type_info": "Text"
       },
       {
@@ -56,7 +56,7 @@
       {
         "ordinal": 10,
         "name": "duration_ms",
-        "type_info": "Int4"
+        "type_info": "Int8"
       },
       {
         "ordinal": 11,
@@ -86,5 +86,5 @@
       false
     ]
   },
-  "hash": "f498b7019d756a376a468ac70795762d24b97454628f9b0c231f4592fe6d2ee7"
+  "hash": "cfc2405b368065410c640d329360f8f48c7171e761594a745cbd76dbb581d5d9"
 }

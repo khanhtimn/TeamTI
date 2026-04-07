@@ -36,7 +36,7 @@
       {
         "ordinal": 6,
         "name": "duration_ms",
-        "type_info": "Int4"
+        "type_info": "Int8"
       },
       {
         "ordinal": 7,

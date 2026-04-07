@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH user_genres AS (\n                SELECT UNNEST(t.genres) AS genre, COUNT(*) AS cnt\n                FROM listen_events le\n                JOIN tracks t ON t.id = le.track_id\n                WHERE le.user_id = $1 AND le.completed = true AND t.genres IS NOT NULL\n                GROUP BY genre\n                UNION ALL\n                SELECT UNNEST(t.genres) AS genre, COUNT(*) AS cnt\n                FROM favorites f\n                JOIN tracks t ON t.id = f.track_id\n                WHERE f.user_id = $1 AND t.genres IS NOT NULL\n                GROUP BY genre\n            ),\n            genre_affinity AS (\n                SELECT genre, SUM(cnt)::float8 / MAX(SUM(cnt)::float8) OVER () AS weight\n                FROM user_genres\n                GROUP BY genre\n                ORDER BY weight DESC\n                LIMIT 10\n            ),\n            user_artists AS (\n                SELECT t.artist_display AS artist, COUNT(*)::float8 / MAX(COUNT(*)::float8) OVER () AS weight\n                FROM listen_events le\n                JOIN tracks t ON t.id = le.track_id\n                WHERE le.user_id = $1 AND le.completed = true AND t.artist_display IS NOT NULL\n                GROUP BY t.artist_display\n                ORDER BY weight DESC\n                LIMIT 10\n            ),\n            user_artist_mbids AS (\n                SELECT DISTINCT ta2.artist_id, ar.mbid\n                FROM listen_events le2\n                JOIN track_artists ta2 ON ta2.track_id = le2.track_id\n                JOIN artists ar ON ar.id = ta2.artist_id\n                WHERE le2.user_id = $1 AND le2.completed = true AND ar.mbid IS NOT NULL\n                LIMIT 20\n            ),\n            seed_genres AS (\n                SELECT UNNEST(genres) AS genre FROM tracks WHERE id = $2\n            ),\n            candidates AS (\n                SELECT DISTINCT t.id, t.title, t.artist_display,\n                       al.title AS album_title, t.album_id, t.duration_ms, t.blob_location,\n                       -- Genre overlap\n                       COALESCE((\n                           SELECT SUM(ga.weight) FROM genre_affinity ga WHERE ga.genre = ANY(t.genres)\n                       ), 0)::float8 AS taste_score,\n                       -- Seed genre match\n                       COALESCE((\n                           SELECT COUNT(*)::float8 / NULLIF((SELECT COUNT(*)::float8 FROM seed_genres), 0.0) FROM seed_genres sg WHERE sg.genre = ANY(t.genres)\n                       ), 0.0)::float8 AS seed_genre_score,\n                       -- Artist affinity\n                       COALESCE((\n                           SELECT ua.weight FROM user_artists ua WHERE ua.artist = t.artist_display\n                       ), 0.0)::float8 AS artist_score,\n                       -- Favourites boost\n                       CASE WHEN EXISTS(\n                           SELECT 1 FROM favorites f WHERE f.user_id = $1 AND f.track_id = t.id\n                       ) THEN 1.0 ELSE 0.0 END AS fav_score,\n                       -- Acoustic similarity (pgvector L2 distance, inverted to score)\n                       CASE \n                           WHEN t.bliss_vector IS NOT NULL AND $3::vector IS NOT NULL\n                               THEN 1.0 / (1.0 + (t.bliss_vector <-> $3::vector))\n                           WHEN t.bliss_vector IS NOT NULL AND uac.centroid IS NOT NULL\n                               THEN 1.0 / (1.0 + (t.bliss_vector <-> uac.centroid))\n                           ELSE 0.0\n                       END AS acoustic_score,\n                       -- Last.fm graph proximity\n                       COALESCE((\n                           SELECT MAX(sa.similarity_score)\n                           FROM similar_artists sa\n                           JOIN track_artists ta ON ta.track_id = t.id\n                           JOIN artists ar ON ar.id = ta.artist_id\n                           WHERE ar.mbid IS NOT NULL\n                             AND sa.source_mbid IN (SELECT mbid FROM user_artist_mbids)\n                             AND sa.similar_mbid = ar.mbid\n                       ), 0)::float8 AS lastfm_score\n                FROM tracks t\n                LEFT JOIN albums al ON al.id = t.album_id\n                LEFT JOIN user_acoustic_centroids uac ON uac.user_id = $1\n                WHERE t.id != ALL($4::uuid[])\n                  AND (t.enrichment_status = 'done' OR t.enrichment_status = 'pending')\n                  AND t.id NOT IN (\n                      SELECT track_id FROM listen_events \n                      WHERE user_id = $1 AND started_at > now() - interval '3 hours'\n                  )\n            )\n            SELECT id, title, artist_display, album_title, album_id, duration_ms, blob_location\n            FROM candidates\n            ORDER BY (\n                (\n                    $5 * (taste_score + seed_genre_score + artist_score + fav_score) +\n                    $6 * acoustic_score +\n                    0.15 * lastfm_score\n                ) * (0.75 + RANDOM() * 0.5)\n            ) DESC\n            LIMIT $7\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "artist_display",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "album_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "album_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "duration_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "blob_location",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        {
+          "Custom": {
+            "name": "vector",
+            "kind": "Simple"
+          }
+        },
+        "UuidArray",
+        "Float8",
+        "Float8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "bfbe2281c73908f0967aa6762e14d268a362feeb4c4fadfb4ebc341d2c881cdb"
+}
