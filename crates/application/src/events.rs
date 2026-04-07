@@ -10,7 +10,7 @@ fn new_correlation_id() -> Uuid {
 pub struct TrackScanned {
     pub track_id: Uuid,
     pub fingerprint: String,
-    pub duration_secs: u32,
+    pub duration_ms: i64,
     pub blob_location: String,
     #[serde(default = "new_correlation_id")]
     pub correlation_id: Uuid,
@@ -21,7 +21,7 @@ pub struct TrackScanned {
 pub struct AcoustIdRequest {
     pub track_id: Uuid,
     pub fingerprint: String,
-    pub duration_secs: u32,
+    pub duration_ms: i64,
     /// Carried from claim_for_enrichment — eliminates a DB read in
     /// the `AcoustID` worker (D1 fix).
     pub enrichment_attempts: i32,
@@ -39,7 +39,7 @@ pub struct ToMusicBrainz {
     pub mbid: String,        // MusicBrainz Recording ID
     pub acoustid_id: String, // AcoustID track ID
     pub confidence: f32,
-    pub duration_secs: u32, // carried through for MusicBrainz use
+    pub duration_ms: i64, // carried through for downstream use
     /// Carried through the pipeline (D2 fix).
     pub blob_location: String,
     /// DESIGN-3: Carried through pipeline — eliminates DB re-fetch in error path.
@@ -61,7 +61,7 @@ pub struct ToLastFm {
     pub track_name: String,
     pub artist_name: String,
     pub album_name: Option<String>,
-    pub duration_secs: u32,
+    pub duration_ms: i64,
     // Pass 4: artist MBIDs from track_artists for Last.fm lookup
     pub artist_mbids: Vec<String>,
 }
@@ -80,7 +80,7 @@ pub struct ToLyrics {
     pub track_name: String,
     pub artist_name: String,
     pub album_name: Option<String>,
-    pub duration_secs: u32,
+    pub duration_ms: i64,
 }
 
 /// Emitted by Lyrics Worker after lyrics lookup.

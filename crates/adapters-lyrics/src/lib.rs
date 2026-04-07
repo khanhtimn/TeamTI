@@ -56,7 +56,7 @@ impl LyricsProviderPort for LyricsAdapter {
         track_name: &str,
         artist_name: &str,
         album_name: Option<&str>,
-        duration_secs: u32,
+        duration_ms: i64,
     ) -> Result<Option<String>, AppError> {
         // 1. Search for local sidecar .lrc file
         let mut audio_path = self.media_root.join(blob_location);
@@ -74,6 +74,7 @@ impl LyricsProviderPort for LyricsAdapter {
 
         // 2. Query LRCLIB
         self.limiter.until_ready().await;
+        let duration_secs = duration_ms / 1000;
         debug!(
             track_name,
             artist_name, duration_secs, "Querying LRCLIB API"

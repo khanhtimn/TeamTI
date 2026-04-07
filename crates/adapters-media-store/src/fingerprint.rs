@@ -118,7 +118,7 @@ pub async fn run_fingerprint_worker(
                                 disc_number: raw_tags
                                     .disc_number
                                     .map(|n| i32::try_from(n).unwrap_or(0)),
-                                duration_ms: Some(i64::from(duration_ms)),
+                                duration_ms: Some(duration_ms),
                                 genres: raw_tags.genres,
                                 year: raw_tags.year,
                                 bpm: raw_tags.bpm,
@@ -159,7 +159,7 @@ pub async fn run_fingerprint_worker(
                                             .send(TrackScanned {
                                                 track_id: inserted.id,
                                                 fingerprint: fp.fingerprint,
-                                                duration_secs: fp.duration_secs,
+                                                duration_ms: fp.duration_ms,
                                                 blob_location: rel.clone(),
                                                 correlation_id: msg.correlation_id,
                                             })

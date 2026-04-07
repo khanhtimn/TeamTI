@@ -9,7 +9,7 @@ pub struct ManagedBlobRef {
 pub enum PlayableSource {
     ResolvedPlayable {
         path: String,
-        duration_ms: Option<u64>,
+        duration_ms: Option<i64>,
     },
     UnresolvedRemote(String),
 }

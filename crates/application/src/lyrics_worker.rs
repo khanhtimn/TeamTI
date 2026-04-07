@@ -57,7 +57,7 @@ impl LyricsWorker {
                     &event.track_name,
                     &event.artist_name,
                     event.album_name.as_deref(),
-                    event.duration_secs,
+                    event.duration_ms,
                 )
                 .await?
             {

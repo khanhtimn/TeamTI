@@ -48,13 +48,15 @@ impl AcoustIdPort for AcoustIdAdapter {
         // until_ready() yields to the tokio scheduler — no busy-wait.
         self.limiter.until_ready().await;
 
+        let duration_secs_str = (fp.duration_ms / 1000).to_string();
+
         let resp = self
             .client
             .post("https://api.acoustid.org/v2/lookup")
             .form(&[
                 ("client", self.api_key.as_str()),
                 ("fingerprint", fp.fingerprint.as_str()),
-                ("duration", &fp.duration_secs.to_string()),
+                ("duration", &duration_secs_str),
                 ("meta", "recordings compress"),
             ])
             .send()
@@ -115,13 +117,14 @@ impl AcoustIdPort for AcoustIdAdapter {
         // B3 fix: among recordings in the best result, prefer the one whose
         // duration is closest to our decoded duration. AcoustID's recording
         // list is not ranked — the first entry may be a live or alternate take.
+        // Compare in ms-space: AcoustID returns seconds (f64), we have ms (i64).
         Ok(best.map(|r| {
             let best_rec = r
                 .recordings
                 .iter()
                 .min_by_key(|rec| {
-                    rec.duration.map_or(u64::MAX, |d| {
-                        (i64::from(d) - i64::from(fp.duration_secs)).unsigned_abs()
+                    rec.duration.map_or(i64::MAX, |d_secs| {
+                        ((d_secs * 1000.0) as i64 - fp.duration_ms).abs()
                     })
                 })
                 .unwrap_or(&r.recordings[0]);

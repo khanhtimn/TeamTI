@@ -18,7 +18,7 @@ use application::error::AppError;
 /// PERF-5: Reads the file into memory once, then shares the buffer between
 /// lofty (tag extraction) and Symphonia (audio decode), eliminating the second
 /// SMB file open that was required when each library opened the file independently.
-pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), AppError> {
+pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, i64), AppError> {
     // Single file read into memory — eliminates double SMB open.
     let file_bytes = std::fs::read(path).map_err(|e| AppError::Io {
         path: Some(path.to_owned()),
@@ -139,8 +139,6 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
             frames as f64 * f64::from(tb.numer) / f64::from(tb.denom)
         });
 
-    let duration_secs_u32 = duration_secs as u32;
-
     let codec = symphonia::default::get_codecs()
         .get_codec(track.codec_params.codec)
         .map(|d| d.long_name.to_string());
@@ -208,10 +206,10 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
     // string expected by the AcoustID API (DESIGN-1 fix).
     let fingerprint_str = fp.encode();
 
-    let duration_ms = if duration_secs > 0.0 {
-        (duration_secs * 1000.0) as u32
+    let duration_ms: i64 = if duration_secs > 0.0 {
+        (duration_secs * 1000.0) as i64
     } else {
-        (decoded_secs * 1000.0) as u32
+        (decoded_secs * 1000.0) as i64
     };
 
     raw_tags.duration_ms = Some(duration_ms);
@@ -219,7 +217,7 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
     Ok((
         AudioFingerprint {
             fingerprint: fingerprint_str,
-            duration_secs: duration_secs_u32.max((decoded_secs as u32).max(1)),
+            duration_ms,
         },
         raw_tags,
         duration_ms,

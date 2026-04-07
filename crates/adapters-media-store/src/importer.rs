@@ -7,7 +7,7 @@ use crate::text::{normalize, normalize_filename, normalize_opt};
 pub struct AudioMetadata {
     pub title: String,
     pub artist: Option<String>,
-    pub duration_ms: Option<u64>,
+    pub duration_ms: Option<i64>,
     pub original_filename: String,
 }
 
@@ -44,12 +44,12 @@ pub fn extract_metadata(path: &Path) -> AudioMetadata {
 fn extract_duration_ms(
     track: &symphonia::core::formats::Track,
     format: &dyn symphonia::core::formats::FormatReader,
-) -> Option<u64> {
+) -> Option<i64> {
     // Tier 1: n_frames via codec time_base (most reliable for CBR/FLAC/OGG)
     if let (Some(n_frames), Some(tb)) = (track.codec_params.n_frames, track.codec_params.time_base)
     {
         let duration_secs = tb.calc_time(n_frames);
-        let ms = (duration_secs.seconds as f64 * 1000.0 + duration_secs.frac * 1000.0) as u64;
+        let ms = (duration_secs.seconds as f64 * 1000.0 + duration_secs.frac * 1000.0) as i64;
         if ms > 0 {
             return Some(ms);
         }

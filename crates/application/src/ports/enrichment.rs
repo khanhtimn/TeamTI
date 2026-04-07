@@ -12,7 +12,7 @@ pub struct RawFileTags {
     pub genres: Option<Vec<String>>,
     pub track_number: Option<u32>,
     pub disc_number: Option<u32>,
-    pub duration_ms: Option<u32>,
+    pub duration_ms: Option<i64>,
     pub bpm: Option<i32>,
     pub isrc: Option<String>,
     pub composer: Option<String>,
@@ -29,7 +29,7 @@ pub struct RawFileTags {
 #[derive(Debug, Clone)]
 pub struct AudioFingerprint {
     pub fingerprint: String, // base64-encoded Chromaprint string
-    pub duration_secs: u32,
+    pub duration_ms: i64,
 }
 
 /// Best match returned by AcoustID lookup.
@@ -112,6 +112,6 @@ pub trait LyricsProviderPort: Send + Sync {
         track_name: &str,
         artist_name: &str,
         album_name: Option<&str>,
-        duration_secs: u32,
+        duration_ms: i64,
     ) -> Result<Option<String>, AppError>;
 }

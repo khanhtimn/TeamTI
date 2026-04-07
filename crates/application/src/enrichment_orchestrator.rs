@@ -71,7 +71,7 @@ impl EnrichmentOrchestrator {
                     let _ = acoustid_tx.send(AcoustIdRequest {
                         track_id:            scanned.track_id,
                         fingerprint:         scanned.fingerprint,
-                        duration_secs:       scanned.duration_secs,
+                        duration_ms:         scanned.duration_ms,
                         enrichment_attempts: track.enrichment_attempts,
                         blob_location:       track.blob_location,
                         correlation_id:      scanned.correlation_id,
@@ -105,7 +105,7 @@ impl EnrichmentOrchestrator {
                                 .send(AcoustIdRequest {
                                     track_id: track.id,
                                     fingerprint: fp.clone(),
-                                    duration_secs: (dur / 1000) as u32,
+                                    duration_ms: dur,
                                     enrichment_attempts: track.enrichment_attempts,
                                     blob_location: track.blob_location.clone(),
                                     correlation_id: uuid::Uuid::new_v4(),

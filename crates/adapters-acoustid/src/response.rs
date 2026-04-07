@@ -19,5 +19,5 @@ pub struct AcoustIdResult {
 pub struct AcoustIdRecording {
     pub id: String, // MusicBrainz Recording ID
     #[serde(default)]
-    pub duration: Option<u32>, // Used for best-match selection (B3 fix)
+    pub duration: Option<f64>,
 }

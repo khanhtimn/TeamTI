@@ -83,7 +83,7 @@ impl LastFmWorker {
                 track_name: msg.track_name,
                 artist_name: msg.artist_name,
                 album_name: msg.album_name,
-                duration_secs: msg.duration_secs,
+                duration_ms: msg.duration_ms,
             };
 
             if lyrics_tx.send(lyrics).await.is_err() {

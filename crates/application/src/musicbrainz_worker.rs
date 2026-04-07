@@ -67,7 +67,7 @@ impl MusicBrainzWorker {
                                 track_name: track.title,
                                 artist_name: track.artist_display.unwrap_or_default(),
                                 album_name: None,
-                                duration_secs: msg.duration_secs,
+                                duration_ms: msg.duration_ms,
                                 artist_mbids: vec![],
                             })
                             .await;
@@ -302,7 +302,7 @@ impl MusicBrainzWorker {
                     track_name: recording.title,
                     artist_name: primary_artist_display,
                     album_name: Some(recording.release_title),
-                    duration_secs: msg.duration_secs,
+                    duration_ms: msg.duration_ms,
                     artist_mbids,
                 })
                 .await;

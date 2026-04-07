@@ -25,7 +25,7 @@ impl AcoustIdWorker {
                 .port
                 .lookup(&crate::ports::enrichment::AudioFingerprint {
                     fingerprint: req.fingerprint.clone(),
-                    duration_secs: req.duration_secs,
+                    duration_ms: req.duration_ms,
                 })
                 .await;
 
@@ -63,7 +63,7 @@ impl AcoustIdWorker {
                             mbid: m.recording_mbid,
                             acoustid_id: m.acoustid_id,
                             confidence: m.score,
-                            duration_secs: req.duration_secs,
+                            duration_ms: req.duration_ms,
                             blob_location: req.blob_location, // D2 carry-through
                             enrichment_attempts: attempts,    // DESIGN-3 carry-through
                             correlation_id: req.correlation_id,
