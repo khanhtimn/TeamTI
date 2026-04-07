@@ -12,6 +12,7 @@ pub struct PgAlbumRepository {
 }
 
 impl PgAlbumRepository {
+    #[must_use]
     pub fn new(db: Database) -> Self {
         Self { db }
     }

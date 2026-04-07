@@ -40,12 +40,9 @@ impl LyricsWorker {
         debug!("Processing lyrics enrichment");
 
         let track_opt = self.track_repo.find_by_id(event.track_id).await?;
-        let track = match track_opt {
-            Some(t) => t,
-            None => {
-                error!("Track not found in DB during Lyrics Enrichment");
-                return Ok(());
-            }
+        let Some(track) = track_opt else {
+            error!("Track not found in DB during Lyrics Enrichment");
+            return Ok(());
         };
 
         // If lyrics already exist (embedded during scan), skip LRCLIB.

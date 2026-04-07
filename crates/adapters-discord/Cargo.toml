@@ -19,6 +19,9 @@ serenity = { workspace = true, features = [
     "model",
 ] }
 async-trait = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["sync", "time"] }
+tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true, features = ["default"] }
 uuid = { workspace = true, features = ["v4", "serde", "fast-rng"] }
+chrono = { workspace = true, features = ["clock"] }
+fastrand = { workspace = true, features = ["std"] }

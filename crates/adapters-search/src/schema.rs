@@ -26,6 +26,7 @@ pub struct MusicSchema {
 }
 
 impl MusicSchema {
+    #[must_use]
     pub fn build() -> Self {
         let mut b = SchemaBuilder::new();
 

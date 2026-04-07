@@ -8,14 +8,17 @@ use uuid::Uuid;
 
 use adapters_voice::lifecycle::{TrackLifecycleEvent, TrackLifecycleRx, TrackLifecycleTx};
 use adapters_voice::player::enqueue_track;
-use adapters_voice::state::QueuedTrack;
+use adapters_voice::state::{QueueSource, QueuedTrack};
 use adapters_voice::state_map::GuildStateMap;
-use adapters_voice::track_event_handler::post_now_playing;
+use adapters_voice::track_event_handler::{
+    np_auto_update_task, post_now_playing, post_now_playing_new,
+};
 use application::RADIO_BATCH_SIZE;
 use application::ports::recommendation::RecommendationPort;
 use application::ports::repository::TrackRepository;
 use application::ports::user_library::UserLibraryPort;
 use domain::analysis::MoodWeight;
+use tokio_util::sync::CancellationToken;
 
 #[allow(clippy::too_many_arguments)]
 pub async fn run_lifecycle_worker(
@@ -39,6 +42,7 @@ pub async fn run_lifecycle_worker(
                 track_duration_ms: _,
                 users_in_channel,
             } => {
+                // ── Open listen events for all users in VC ────────────
                 let guild_id_str = guild_id.to_string();
                 for user_id in &users_in_channel {
                     if let Err(e) = user_library_port
@@ -52,6 +56,42 @@ pub async fn run_lifecycle_worker(
                             operation = "lifecycle.open_listen_event",
                             "failed to open listen event"
                         );
+                    }
+                }
+
+                // ── Pass 5: Auto-post NP embed on TrackStarted ────────
+                if let Some(state_lock) = guild_state.get(&guild_id) {
+                    let state_lock = state_lock.clone();
+                    let (channel_id, track) = {
+                        let state = state_lock.lock().await;
+                        (state.text_channel_id, state.meta_queue.front().cloned())
+                    };
+
+                    if let Some(channel_id) = channel_id {
+                        // Post new NP message (old one left stale per spec)
+                        let new_msg_id = post_now_playing_new(
+                            &http,
+                            channel_id,
+                            guild_id,
+                            &state_lock,
+                            track.as_ref(),
+                        )
+                        .await;
+
+                        // Cancel old NP update, start new one
+                        if let Some(msg_id) = new_msg_id {
+                            let np_cancel = CancellationToken::new();
+                            {
+                                let mut state = state_lock.lock().await;
+                                state.cancel_np_update();
+                                state.np_update_cancel = Some(np_cancel.clone());
+                            }
+                            let http_clone = Arc::clone(&http);
+                            let sl = state_lock.clone();
+                            tokio::spawn(np_auto_update_task(
+                                np_cancel, http_clone, channel_id, guild_id, msg_id, sl,
+                            ));
+                        }
                     }
                 }
             }
@@ -152,7 +192,9 @@ pub async fn run_lifecycle_worker(
                         );
 
                         for summary in tracks {
-                            let queued = QueuedTrack::from(summary);
+                            let mut queued = QueuedTrack::from(summary);
+                            queued.source = QueueSource::Radio;
+                            queued.added_by = String::new(); // radio has no user
 
                             // Add to our metadata queue first
                             let state_lock = guild_state
@@ -279,8 +321,21 @@ pub async fn run_lifecycle_worker(
         }
     }
 }
-// TODO: verify bliss v2 feature vector indices before enabling
-// mood-aware weighting. Defaulting to BALANCED until confirmed.
-fn mood_weight_for_track(_bliss_vector: &[f32]) -> MoodWeight {
-    MoodWeight::BALANCED
+fn mood_weight_for_track(bliss_vector: &[f32]) -> MoodWeight {
+    if bliss_vector.len() < 9 {
+        return MoodWeight::BALANCED;
+    }
+
+    // bliss-audio v2 feature indices:
+    // 0 = Tempo
+    // 8 = MeanLoudness
+    let tempo = bliss_vector[0];
+    let loudness = bliss_vector[8];
+
+    // Sensible defaults for zero-centered bliss features
+    if tempo > 0.0 || loudness > 0.0 {
+        MoodWeight::ACOUSTIC_DOMINANT
+    } else {
+        MoodWeight::TASTE_DOMINANT
+    }
 }

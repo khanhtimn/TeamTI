@@ -15,6 +15,7 @@ pub struct PgUserLibraryRepository {
 }
 
 impl PgUserLibraryRepository {
+    #[must_use]
     pub fn new(db: Database) -> Self {
         Self { db }
     }
@@ -140,11 +141,11 @@ impl UserLibraryPort for PgUserLibraryRepository {
         &self,
         user_id: &str,
         track_id: Uuid,
-        play_duration_ms: i32,
-        track_duration_ms: i32,
+        play_duration_ms: i64,
+        track_duration_ms: i64,
     ) -> Result<(), AppError> {
         let completed = if track_duration_ms > 0 {
-            (play_duration_ms as f32 / track_duration_ms as f32) >= LISTEN_COMPLETION_THRESHOLD
+            (play_duration_ms as f64 / track_duration_ms as f64) >= LISTEN_COMPLETION_THRESHOLD
         } else {
             false
         };
@@ -168,11 +169,15 @@ impl UserLibraryPort for PgUserLibraryRepository {
         &self,
         track_id: Uuid,
         guild_id: &str,
-        play_duration_ms: i32,
-        track_duration_ms: i32,
+        play_duration_ms: i64,
+        track_duration_ms: i64,
     ) -> Result<Vec<String>, AppError> {
+        struct RowResult {
+            user_id: String,
+        }
+
         let completed = if track_duration_ms > 0 {
-            (play_duration_ms as f32 / track_duration_ms as f32) >= LISTEN_COMPLETION_THRESHOLD
+            (play_duration_ms as f64 / track_duration_ms as f64) >= LISTEN_COMPLETION_THRESHOLD
         } else {
             false
         };
@@ -195,9 +200,6 @@ impl UserLibraryPort for PgUserLibraryRepository {
             return Ok(Vec::new());
         }
 
-        struct RowResult {
-            user_id: String,
-        }
         let result = sqlx::query_as!(
             RowResult,
             "UPDATE listen_events
@@ -253,7 +255,7 @@ struct TrackSummaryRow {
     artist_display: Option<String>,
     album_title: Option<String>,
     album_id: Option<Uuid>,
-    duration_ms: Option<i32>,
+    duration_ms: Option<i64>,
     blob_location: String,
 }
 

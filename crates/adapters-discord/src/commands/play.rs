@@ -14,7 +14,7 @@ use adapters_voice::lifecycle::TrackLifecycleTx;
 use adapters_voice::player::{enqueue_track, join_channel};
 use adapters_voice::state::QueuedTrack;
 use adapters_voice::state_map::GuildStateMap;
-use adapters_voice::track_event_handler::post_now_playing;
+
 use application::ports::recommendation::RecommendationPort;
 use application::ports::repository::TrackRepository;
 use application::ports::search::TrackSearchPort;
@@ -119,7 +119,7 @@ pub async fn autocomplete(
                     &user_id,
                     None,
                     None,
-                    Default::default(),
+                    domain::MoodWeight::default(),
                     &exclude_ids,
                     remaining,
                 )
@@ -199,36 +199,40 @@ pub async fn run(
     songbird: &Arc<songbird::Songbird>,
     guild_state_map: &Arc<GuildStateMap>,
     lifecycle_tx: &TrackLifecycleTx,
-    _user_library_port: &Arc<dyn UserLibraryPort>,
-    _recommendation_port: &Arc<dyn RecommendationPort>,
+    search_port: &Arc<dyn TrackSearchPort>,
 ) {
     let _ = interaction.defer_ephemeral(http).await;
 
     // ── 1. Parse the selected track UUID from the autocomplete value ───────
-    let asset_id_str = match extract_query(interaction) {
-        Some(s) => s,
-        None => {
-            let _ = interaction
-                .edit_response(
-                    http,
-                    EditInteractionResponse::new().content("Invalid selection."),
-                )
-                .await;
-            return;
-        }
+    let asset_id_str = if let Some(s) = extract_query(interaction) {
+        s
+    } else {
+        let _ = interaction
+            .edit_response(
+                http,
+                EditInteractionResponse::new().content("Invalid selection."),
+            )
+            .await;
+        return;
     };
 
     let track_id = match Uuid::parse_str(asset_id_str) {
         Ok(id) => id,
         Err(_) => {
-            let _ = interaction
-                .edit_response(
-                    http,
-                    EditInteractionResponse::new()
-                        .content("Invalid track ID — please use the autocomplete list."),
-                )
-                .await;
-            return;
+            // Fall back to Tantivy search if the user typed text directly
+            match search_port.autocomplete(asset_id_str, 1).await {
+                Ok(results) if !results.is_empty() => results[0].id,
+                _ => {
+                    let _ = interaction
+                        .edit_response(
+                            http,
+                            EditInteractionResponse::new()
+                                .content("No matching track found for your search."),
+                        )
+                        .await;
+                    return;
+                }
+            }
         }
     };
 
@@ -241,18 +245,17 @@ pub async fn run(
             .and_then(|vs| vs.channel_id)
     });
 
-    let channel_id = match user_voice_channel {
-        Some(ch) => ch,
-        None => {
-            let _ = interaction
-                .edit_response(
-                    http,
-                    EditInteractionResponse::new()
-                        .content("You must be in a voice channel to use this command."),
-                )
-                .await;
-            return;
-        }
+    let channel_id = if let Some(ch) = user_voice_channel {
+        ch
+    } else {
+        let _ = interaction
+            .edit_response(
+                http,
+                EditInteractionResponse::new()
+                    .content("You must be in a voice channel to use this command."),
+            )
+            .await;
+        return;
     };
 
     // ── 3. Look up track metadata from the database ────────────────────────
@@ -285,7 +288,9 @@ pub async fn run(
         }
     };
 
-    let queued = QueuedTrack::from(&track);
+    let mut queued = QueuedTrack::from(&track);
+    queued.added_by = interaction.user.id.to_string();
+    queued.source = adapters_voice::state::QueueSource::Manual;
 
     // ── 4. Handle channel move ─────────────────────────────────────────────
     {
@@ -370,16 +375,6 @@ pub async fn run(
                 state.meta_queue.len()
             };
             let msg = if queue_pos == 1 {
-                let text_channel = ChannelId::new(interaction.channel_id.get());
-                post_now_playing(
-                    http,
-                    text_channel,
-                    guild_id,
-                    &state_lock,
-                    Some(&queued),
-                    None,
-                )
-                .await;
                 format!("▶ Now playing **{}**", queued.title)
             } else {
                 format!(

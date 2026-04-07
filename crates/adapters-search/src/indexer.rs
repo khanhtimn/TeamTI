@@ -88,8 +88,8 @@ pub fn build_document(row: &TrackRow, s: &MusicSchema) -> TantivyDocument {
     //   a) Separate has_year: u64 (0/1) fast field
     //   b) Use i64::MIN as sentinel
     // Do not use year=0 as a filter target.
-    doc.add_u64(s.year, row.year.map(|y| y as u64).unwrap_or(0));
-    doc.add_u64(s.bpm, row.bpm.map(|b| b as u64).unwrap_or(0));
+    doc.add_u64(s.year, row.year.map_or(0, |y| y as u64));
+    doc.add_u64(s.bpm, row.bpm.map_or(0, |b| b as u64));
 
     doc
 }
@@ -117,7 +117,7 @@ pub async fn rebuild_index(
             t.year,
             t.bpm,
             COALESCE(t.genres, '{}'::text[])                         AS "track_genres!: Vec<String>",
-            al.title                                                 AS album_title,
+            al.title                                                 AS "album_title?",
             COALESCE(al.genres, '{}'::text[])                        AS "album_genres!: Vec<String>",
             COALESCE(
                 array_agg(ar.name)      FILTER (WHERE ta.role = 'primary'),
@@ -143,7 +143,6 @@ pub async fn rebuild_index(
         LEFT JOIN albums        al ON al.id       = t.album_id
         LEFT JOIN track_artists ta ON ta.track_id = t.id
         LEFT JOIN artists       ar ON ar.id       = ta.artist_id
-        WHERE t.enrichment_status = 'done'
         GROUP BY t.id, al.title, al.genres
         "#
     )
@@ -207,7 +206,7 @@ pub async fn reindex_track(
             t.year,
             t.bpm,
             COALESCE(t.genres, '{}'::text[])                         AS "track_genres!: Vec<String>",
-            al.title                                                 AS album_title,
+            al.title                                                 AS "album_title?",
             COALESCE(al.genres, '{}'::text[])                        AS "album_genres!: Vec<String>",
             COALESCE(
                 array_agg(ar.name)      FILTER (WHERE ta.role = 'primary'),
@@ -233,8 +232,7 @@ pub async fn reindex_track(
         LEFT JOIN albums        al ON al.id       = t.album_id
         LEFT JOIN track_artists ta ON ta.track_id = t.id
         LEFT JOIN artists       ar ON ar.id       = ta.artist_id
-        WHERE t.enrichment_status = 'done'
-          AND t.id = $1
+        WHERE t.id = $1
         GROUP BY t.id, al.title, al.genres
         "#,
         track_id

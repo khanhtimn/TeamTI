@@ -34,7 +34,7 @@ pub struct ListenEvent {
     pub started_at: DateTime<Utc>,
     /// NULL until the event is closed (track ends, skipped, or bot leaves vc).
     /// Set to elapsed playback time, not wall time.
-    pub play_duration_ms: Option<i32>,
+    pub play_duration_ms: Option<i64>,
     /// Computed at event close: play_duration_ms / tracks.duration_ms >= 0.8
     pub completed: bool,
 }
@@ -48,6 +48,7 @@ pub enum PlaylistVisibility {
 }
 
 impl PlaylistVisibility {
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Private => "private",

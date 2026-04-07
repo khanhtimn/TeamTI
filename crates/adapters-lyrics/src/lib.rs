@@ -67,7 +67,7 @@ impl LyricsProviderPort for LyricsAdapter {
             match tokio::fs::read_to_string(&audio_path).await {
                 Ok(content) => return Ok(Some(content)),
                 Err(e) => {
-                    warn!(error = %e, path = %audio_path.display(), "Failed to read local .lrc file, falling back to LRCLIB")
+                    warn!(error = %e, path = %audio_path.display(), "Failed to read local .lrc file, falling back to LRCLIB");
                 }
             }
         }
@@ -144,11 +144,11 @@ impl LyricsProviderPort for LyricsAdapter {
                 warn!(error = %e, "Failed to ensure .lrc directory exists");
             }
             match tokio::fs::write(&audio_path, lrc_text).await {
-                Ok(_) => {
-                    info!(path = %audio_path.display(), "Successfully wrote local .lrc sidecar file")
+                Ok(()) => {
+                    info!(path = %audio_path.display(), "Successfully wrote local .lrc sidecar file");
                 }
                 Err(e) => {
-                    warn!(error = %e, path = %audio_path.display(), "Failed to write local .lrc sidecar file")
+                    warn!(error = %e, path = %audio_path.display(), "Failed to write local .lrc sidecar file");
                 }
             }
         }

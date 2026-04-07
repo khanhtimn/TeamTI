@@ -15,7 +15,7 @@ pub struct Track {
     pub album_id: Option<Uuid>,
     pub track_number: Option<i32>,
     pub disc_number: Option<i32>,
-    pub duration_ms: Option<i32>,
+    pub duration_ms: Option<i64>,
     pub genres: Option<Vec<String>>,
     pub year: Option<i32>,
 
@@ -70,6 +70,6 @@ pub struct TrackSummary {
     pub artist_display: Option<String>,
     pub album_title: Option<String>,
     pub album_id: Option<Uuid>,
-    pub duration_ms: Option<i32>,
+    pub duration_ms: Option<i64>,
     pub blob_location: Option<String>,
 }

@@ -36,7 +36,7 @@ pub fn write_tags_atomic(path: &Path, tags: &TagData) -> Result<WriteResult, App
 
     // A2 fix: Guard must be a NAMED binding (not `let _ = ...`).
     // The guard must live until after rename succeeds or fails.
-    let mut _temp_guard = TempGuard::new(&temp_path);
+    let mut temp_guard = TempGuard::new(&temp_path);
 
     // Step 1: Copy original → temp (preserves all audio data)
     std::fs::copy(path, &temp_path).map_err(|_| AppError::TagWrite {
@@ -223,7 +223,7 @@ pub fn write_tags_atomic(path: &Path, tags: &TagData) -> Result<WriteResult, App
 
     // A2 fix: disarm AFTER rename succeeds — if rename had failed,
     // the guard would have dropped and removed the temp file.
-    _temp_guard.disarm();
+    temp_guard.disarm();
 
     Ok(WriteResult {
         new_mtime,
@@ -265,11 +265,7 @@ fn is_lrc_format(s: &str) -> bool {
         t.starts_with('[') && {
             // Check for [digits:digits pattern
             let inner = t.trim_start_matches('[');
-            inner
-                .chars()
-                .next()
-                .map(|c| c.is_ascii_digit())
-                .unwrap_or(false)
+            inner.chars().next().is_some_and(|c| c.is_ascii_digit())
         }
     })
 }

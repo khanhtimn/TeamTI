@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     album_id        UUID REFERENCES albums(id),
     track_number    INTEGER,
     disc_number     INTEGER DEFAULT 1,
-    duration_ms     INTEGER,
+    duration_ms     BIGINT,
     genres          TEXT[],
     year            INTEGER,
     bpm             INTEGER,

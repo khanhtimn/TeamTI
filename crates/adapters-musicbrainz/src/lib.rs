@@ -25,6 +25,7 @@ pub struct MusicBrainzAdapter {
 }
 
 impl MusicBrainzAdapter {
+    #[must_use]
     pub fn new(user_agent: String) -> Self {
         // C2 fix: validate User-Agent format at startup. MusicBrainz requires
         // "AppName/version (contact-url)" format. Missing or malformed UA
@@ -56,8 +57,7 @@ impl MusicBrainzPort for MusicBrainzAdapter {
         self.limiter.until_ready().await;
 
         let url = format!(
-            "https://musicbrainz.org/ws/2/recording/{}?inc=releases+artists+genres+release-groups+isrcs+work-rels",
-            mbid
+            "https://musicbrainz.org/ws/2/recording/{mbid}?inc=releases+artists+genres+release-groups+isrcs+work-rels"
         );
 
         let resp = self
@@ -193,10 +193,7 @@ impl MusicBrainzPort for MusicBrainzAdapter {
     ) -> Result<application::ports::enrichment::MbWorkCredits, AppError> {
         self.limiter.until_ready().await;
 
-        let url = format!(
-            "https://musicbrainz.org/ws/2/work/{}?inc=artist-rels",
-            work_mbid
-        );
+        let url = format!("https://musicbrainz.org/ws/2/work/{work_mbid}?inc=artist-rels");
 
         let resp = self
             .client
@@ -259,10 +256,7 @@ impl MusicBrainzPort for MusicBrainzAdapter {
     async fn fetch_release_label(&self, release_mbid: &str) -> Result<Option<String>, AppError> {
         self.limiter.until_ready().await;
 
-        let url = format!(
-            "https://musicbrainz.org/ws/2/release/{}?inc=labels",
-            release_mbid
-        );
+        let url = format!("https://musicbrainz.org/ws/2/release/{release_mbid}?inc=labels");
 
         let resp = self
             .client

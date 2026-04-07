@@ -49,43 +49,45 @@ impl TantivySearchAdapter {
         let index = {
             let dir_result = MmapDirectory::open(&path);
 
-            match dir_result {
-                Ok(dir) => {
-                    match Index::open(dir) {
-                        Ok(idx) => {
-                            tracing::debug!(
-                                path = %path.display(),
-                                operation = "search.index_opened",
-                                "opened existing Tantivy index"
-                            );
-                            idx
-                        }
-                        Err(_) => {
-                            // Directory exists but is not a valid index — create fresh.
-                            tracing::info!(
-                                path = %path.display(),
-                                operation = "search.index_created",
-                                "no valid index found, creating new"
-                            );
-                            let dir = MmapDirectory::open(&path).map_err(|e| AppError::Search {
-                                kind: SearchErrorKind::OpenFailed,
-                                detail: e.to_string(),
-                            })?;
-                            Index::create(dir, schema.schema.clone(), Default::default())
-                                .map_err(open_err)?
-                        }
-                    }
-                }
-                Err(_) => {
-                    // Directory doesn't exist yet — create it and the index.
-                    std::fs::create_dir_all(&path).map_err(io_err)?;
+            if let Ok(dir) = dir_result {
+                if let Ok(idx) = Index::open(dir) {
+                    tracing::debug!(
+                        path = %path.display(),
+                        operation = "search.index_opened",
+                        "opened existing Tantivy index"
+                    );
+                    idx
+                } else {
+                    // Directory exists but is not a valid index — create fresh.
+                    tracing::info!(
+                        path = %path.display(),
+                        operation = "search.index_created",
+                        "no valid index found, creating new"
+                    );
                     let dir = MmapDirectory::open(&path).map_err(|e| AppError::Search {
                         kind: SearchErrorKind::OpenFailed,
                         detail: e.to_string(),
                     })?;
-                    Index::create(dir, schema.schema.clone(), Default::default())
-                        .map_err(open_err)?
+                    Index::create(
+                        dir,
+                        schema.schema.clone(),
+                        tantivy::IndexSettings::default(),
+                    )
+                    .map_err(open_err)?
                 }
+            } else {
+                // Directory doesn't exist yet — create it and the index.
+                std::fs::create_dir_all(&path).map_err(io_err)?;
+                let dir = MmapDirectory::open(&path).map_err(|e| AppError::Search {
+                    kind: SearchErrorKind::OpenFailed,
+                    detail: e.to_string(),
+                })?;
+                Index::create(
+                    dir,
+                    schema.schema.clone(),
+                    tantivy::IndexSettings::default(),
+                )
+                .map_err(open_err)?
             }
         };
 

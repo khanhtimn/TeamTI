@@ -1,5 +1,6 @@
 use tantivy::tokenizer::{AsciiFoldingFilter, LowerCaser, SimpleTokenizer, TextAnalyzer};
 
+#[must_use]
 pub fn build_music_tokenizer() -> TextAnalyzer {
     TextAnalyzer::builder(SimpleTokenizer::default())
         .filter(LowerCaser)

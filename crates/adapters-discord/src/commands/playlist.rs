@@ -13,7 +13,7 @@ use adapters_voice::lifecycle::TrackLifecycleTx;
 use adapters_voice::player::{enqueue_track, join_channel};
 use adapters_voice::state::QueuedTrack;
 use adapters_voice::state_map::GuildStateMap;
-use adapters_voice::track_event_handler::post_now_playing;
+
 use application::ports::playlist::PlaylistPort;
 use application::ports::search::TrackSearchPort;
 use serenity::all::Cache;
@@ -191,7 +191,6 @@ pub async fn run(
     http: &Arc<Http>,
     interaction: &CommandInteraction,
     playlist_port: &Arc<dyn PlaylistPort>,
-    _search_port: &Arc<dyn TrackSearchPort>,
 ) {
     let options = interaction.data.options();
     let subcmd = match options.first() {
@@ -687,9 +686,8 @@ async fn run_list(
     subcmd: &serenity::model::application::ResolvedOption<'_>,
 ) {
     let _ = interaction.defer_ephemeral(http).await;
-    let target_user = extract_user_option(subcmd, "user")
-        .map(|u| u.to_string())
-        .unwrap_or_else(|| user_id.to_string());
+    let target_user =
+        extract_user_option(subcmd, "user").map_or_else(|| user_id.to_string(), |u| u.to_string());
 
     let is_self = target_user == user_id;
 
@@ -980,9 +978,8 @@ fn extract_string_option<'a>(
     subcmd: &'a serenity::model::application::ResolvedOption<'a>,
     name: &str,
 ) -> Option<&'a str> {
-    let opts = match &subcmd.value {
-        ResolvedValue::SubCommand(opts) => opts,
-        _ => return None,
+    let ResolvedValue::SubCommand(opts) = &subcmd.value else {
+        return None;
     };
     opts.iter()
         .find(|o| o.name == name)
@@ -996,9 +993,8 @@ fn extract_user_option(
     subcmd: &serenity::model::application::ResolvedOption<'_>,
     name: &str,
 ) -> Option<UserId> {
-    let opts = match &subcmd.value {
-        ResolvedValue::SubCommand(opts) => opts,
-        _ => return None,
+    let ResolvedValue::SubCommand(opts) = &subcmd.value else {
+        return None;
     };
     opts.iter()
         .find(|o| o.name == name)
@@ -1052,8 +1048,8 @@ pub fn build_playlist_embed<'a>(
 
 fn error_to_user_message(err: &application::AppError) -> String {
     use application::error::PlaylistErrorKind;
-    match err {
-        application::AppError::Playlist { kind, .. } => match kind {
+    if let application::AppError::Playlist { kind, .. } = err {
+        match kind {
             PlaylistErrorKind::NotFound => "Playlist not found.".to_string(),
             PlaylistErrorKind::Forbidden => "You don't have permission to do that.".to_string(),
             PlaylistErrorKind::AlreadyExists => {
@@ -1062,11 +1058,10 @@ fn error_to_user_message(err: &application::AppError) -> String {
             PlaylistErrorKind::CollaboratorLimit => {
                 "This playlist has reached the collaborator limit.".to_string()
             }
-        },
-        _ => {
-            tracing::warn!(error = %err, "unexpected error in playlist command");
-            "Something went wrong. Please try again.".to_string()
         }
+    } else {
+        tracing::warn!(error = %err, "unexpected error in playlist command");
+        "Something went wrong. Please try again.".to_string()
     }
 }
 
@@ -1084,9 +1079,8 @@ pub async fn run_play(
 ) {
     let _ = interaction.defer(http).await;
 
-    let subcmd = match interaction.data.options.first() {
-        Some(opt) => opt,
-        None => return,
+    let Some(subcmd) = interaction.data.options.first() else {
+        return;
     };
 
     let playlist_id_str = match subcmd.value {
@@ -1099,17 +1093,14 @@ pub async fn run_play(
         _ => "",
     };
 
-    let playlist_id = match Uuid::parse_str(playlist_id_str) {
-        Ok(id) => id,
-        Err(_) => {
-            let _ = interaction
-                .edit_response(
-                    http,
-                    EditInteractionResponse::new().content("Invalid playlist selected."),
-                )
-                .await;
-            return;
-        }
+    let Ok(playlist_id) = Uuid::parse_str(playlist_id_str) else {
+        let _ = interaction
+            .edit_response(
+                http,
+                EditInteractionResponse::new().content("Invalid playlist selected."),
+            )
+            .await;
+        return;
     };
 
     let user_id_str = interaction.user.id.to_string();
@@ -1119,11 +1110,12 @@ pub async fn run_play(
         .await
     {
         Ok(t) => t,
-        Err(_) => {
+        Err(e) => {
+            tracing::error!(error = %e, "failed to get playlist tracks in run_play");
             let _ = interaction
                 .edit_response(
                     http,
-                    EditInteractionResponse::new().content("Playlist not found or access denied."),
+                    EditInteractionResponse::new().content(format!("Error: {e}")),
                 )
                 .await;
             return;
@@ -1148,18 +1140,15 @@ pub async fn run_play(
             .and_then(|vs| vs.channel_id)
     });
 
-    let channel_id = match user_voice_channel {
-        Some(ch) => ch,
-        None => {
-            let _ = interaction
-                .edit_response(
-                    http,
-                    EditInteractionResponse::new()
-                        .content("You must be in a voice channel to use this command."),
-                )
-                .await;
-            return;
-        }
+    let Some(channel_id) = user_voice_channel else {
+        let _ = interaction
+            .edit_response(
+                http,
+                EditInteractionResponse::new()
+                    .content("You must be in a voice channel to use this command."),
+            )
+            .await;
+        return;
     };
 
     let existing_channel = guild_state_map
@@ -1208,7 +1197,9 @@ pub async fn run_play(
     let mut enqueued = 0;
 
     for summary in tracks {
-        let queued = QueuedTrack::from(summary);
+        let mut queued = QueuedTrack::from(summary);
+        queued.added_by = interaction.user.id.to_string();
+        queued.source = adapters_voice::state::QueueSource::Manual;
 
         {
             let mut state = state_lock.lock().await;
@@ -1250,33 +1241,9 @@ pub async fn run_play(
             )
             .await;
     } else {
-        let msg = format!("✅ Enqueued **{}** tracks from the playlist.", enqueued);
+        let msg = format!("✅ Enqueued **{enqueued}** tracks from the playlist.");
         let _ = interaction
             .edit_response(http, EditInteractionResponse::new().content(msg))
             .await;
-
-        let should_post = {
-            let state = state_lock.lock().await;
-            state.meta_queue.len() == enqueued // If queue length matches enqueued, we are playing first track
-        };
-
-        if should_post {
-            let text_channel = ChannelId::new(interaction.channel_id.get());
-            let first_track = {
-                let state = state_lock.lock().await;
-                state.meta_queue.front().cloned()
-            };
-            if let Some(track) = first_track {
-                post_now_playing(
-                    http,
-                    text_channel,
-                    guild_id,
-                    &state_lock,
-                    Some(&track),
-                    None,
-                )
-                .await;
-            }
-        }
     }
 }

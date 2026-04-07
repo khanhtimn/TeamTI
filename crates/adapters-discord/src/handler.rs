@@ -34,7 +34,8 @@ impl EventHandler for DiscordEventHandler {
         match event {
             FullEvent::Ready { data_about_bot, .. } => {
                 use crate::commands::{
-                    clear, favourite, history, leave, play, playlist, radio, rescan,
+                    clear, favourite, history, leave, move_track, nowplaying, pause, play,
+                    playlist, queue, radio, remove, rescan, resume, shuffle, skip,
                 };
 
                 tracing::info!(
@@ -53,6 +54,14 @@ impl EventHandler for DiscordEventHandler {
                     favourite::register(),
                     radio::register(),
                     history::register(),
+                    pause::register(),
+                    resume::register(),
+                    skip::register(),
+                    nowplaying::register(),
+                    queue::register(),
+                    remove::register(),
+                    move_track::register(),
+                    shuffle::register(),
                 ];
 
                 // Clear all old global commands to prevent duplication
@@ -104,10 +113,9 @@ impl EventHandler for DiscordEventHandler {
                                     &self.songbird,
                                     &self.guild_state,
                                     &self.lifecycle_tx,
-                                    &self.user_library_port,
-                                    &self.recommendation_port,
+                                    &self.search_port,
                                 )
-                                .await
+                                .await;
                             }
                             "clear" => {
                                 crate::commands::clear::run(
@@ -116,7 +124,7 @@ impl EventHandler for DiscordEventHandler {
                                     &self.songbird,
                                     &self.guild_state,
                                 )
-                                .await
+                                .await;
                             }
                             "leave" => {
                                 crate::commands::leave::run(
@@ -125,11 +133,11 @@ impl EventHandler for DiscordEventHandler {
                                     &self.songbird,
                                     &self.guild_state,
                                 )
-                                .await
+                                .await;
                             }
                             "rescan" => {
                                 crate::commands::rescan::run(&ctx.http, cmd, &self.search_port)
-                                    .await
+                                    .await;
                             }
                             "playlist" => {
                                 let subcmd = cmd.data.options.first().map(|o| o.name.as_str());
@@ -151,9 +159,8 @@ impl EventHandler for DiscordEventHandler {
                                         &ctx.http,
                                         cmd,
                                         &self.playlist_port,
-                                        &self.search_port,
                                     )
-                                    .await
+                                    .await;
                                 }
                             }
                             "favourite" => {
@@ -163,7 +170,7 @@ impl EventHandler for DiscordEventHandler {
                                     &self.user_library_port,
                                     &self.guild_state,
                                 )
-                                .await
+                                .await;
                             }
                             "radio" => {
                                 crate::commands::radio::run(
@@ -172,7 +179,7 @@ impl EventHandler for DiscordEventHandler {
                                     &self.guild_state,
                                     &self.lifecycle_tx,
                                 )
-                                .await
+                                .await;
                             }
                             "history" => {
                                 crate::commands::history::run(
@@ -180,7 +187,77 @@ impl EventHandler for DiscordEventHandler {
                                     cmd,
                                     &self.user_library_port,
                                 )
-                                .await
+                                .await;
+                            }
+                            // ── Pass 5: new commands ────────────────────
+                            "pause" => {
+                                crate::commands::pause::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.songbird,
+                                    &self.guild_state,
+                                )
+                                .await;
+                            }
+                            "resume" => {
+                                crate::commands::resume::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.songbird,
+                                    &self.guild_state,
+                                )
+                                .await;
+                            }
+                            "skip" => {
+                                crate::commands::skip::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.songbird,
+                                    &self.guild_state,
+                                    &self.lifecycle_tx,
+                                )
+                                .await;
+                            }
+                            "nowplaying" => {
+                                crate::commands::nowplaying::run(&ctx.http, cmd, &self.guild_state)
+                                    .await;
+                            }
+                            "queue" => {
+                                crate::commands::queue::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.songbird,
+                                    &self.guild_state,
+                                    &self.playlist_port,
+                                )
+                                .await;
+                            }
+                            "remove" => {
+                                crate::commands::remove::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.guild_state,
+                                    &self.songbird,
+                                )
+                                .await;
+                            }
+                            "move" => {
+                                crate::commands::move_track::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.guild_state,
+                                    &self.songbird,
+                                )
+                                .await;
+                            }
+                            "shuffle" => {
+                                crate::commands::shuffle::run(
+                                    &ctx.http,
+                                    cmd,
+                                    &self.guild_state,
+                                    &self.songbird,
+                                )
+                                .await;
                             }
                             unknown => tracing::warn!(
                                 command = unknown,
@@ -218,6 +295,14 @@ impl EventHandler for DiscordEventHandler {
                             )
                             .await;
                         }
+                        "skip" => {
+                            crate::commands::skip::autocomplete(&ctx.http, ac, &self.guild_state)
+                                .await;
+                        }
+                        "remove" | "move" => {
+                            crate::commands::queue::autocomplete(&ctx.http, ac, &self.guild_state)
+                                .await;
+                        }
                         _ => {}
                     },
 
@@ -246,6 +331,29 @@ impl DiscordEventHandler {
 
         // Skip page indicator buttons (they're disabled and shouldn't fire)
         if custom_id.contains("page_indicator") {
+            return;
+        }
+
+        if crate::ui::custom_id::QueueAction::is_queue_action(custom_id) {
+            crate::commands::queue::handle_queue_button(
+                &ctx.http,
+                &ctx.cache,
+                interaction,
+                &self.songbird,
+                &self.guild_state,
+            )
+            .await;
+            return;
+        }
+
+        if crate::ui::custom_id::NPAction::is_np_action(custom_id) {
+            crate::commands::nowplaying::handle_np_button(
+                &ctx.http,
+                interaction,
+                &self.songbird,
+                &self.guild_state,
+            )
+            .await;
             return;
         }
 

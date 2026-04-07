@@ -14,6 +14,7 @@ pub struct PgRecommendationRepository {
 }
 
 impl PgRecommendationRepository {
+    #[must_use]
     pub fn new(db: Database) -> Self {
         Self { db }
     }
@@ -31,8 +32,8 @@ impl RecommendationPort for PgRecommendationRepository {
         limit: usize,
     ) -> Result<Vec<TrackSummary>, AppError> {
         let exclude_ids: Vec<Uuid> = exclude.to_vec();
-        let w_acoustic = mood_weight.acoustic as f64;
-        let w_taste = mood_weight.taste as f64;
+        let w_acoustic = f64::from(mood_weight.acoustic);
+        let w_taste = f64::from(mood_weight.taste);
 
         // Convert vectors to pgvector::Vector for binding
         let seed_vec = seed_vector.map(pgvector::Vector::from);
@@ -59,19 +60,19 @@ impl RecommendationPort for PgRecommendationRepository {
                 GROUP BY genre
             ),
             genre_affinity AS (
-                SELECT genre, SUM(cnt) AS weight
+                SELECT genre, SUM(cnt)::float8 / MAX(SUM(cnt)::float8) OVER () AS weight
                 FROM user_genres
                 GROUP BY genre
                 ORDER BY weight DESC
                 LIMIT 10
             ),
             user_artists AS (
-                SELECT t.artist_display AS artist, COUNT(*) AS cnt
+                SELECT t.artist_display AS artist, COUNT(*)::float8 / MAX(COUNT(*)::float8) OVER () AS weight
                 FROM listen_events le
                 JOIN tracks t ON t.id = le.track_id
                 WHERE le.user_id = $1 AND le.completed = true AND t.artist_display IS NOT NULL
                 GROUP BY t.artist_display
-                ORDER BY cnt DESC
+                ORDER BY weight DESC
                 LIMIT 10
             ),
             user_artist_mbids AS (
@@ -94,12 +95,12 @@ impl RecommendationPort for PgRecommendationRepository {
                        ), 0)::float8 AS taste_score,
                        -- Seed genre match
                        COALESCE((
-                           SELECT COUNT(*) FROM seed_genres sg WHERE sg.genre = ANY(t.genres)
-                       ), 0)::float8 AS seed_genre_score,
+                           SELECT COUNT(*)::float8 / NULLIF((SELECT COUNT(*)::float8 FROM seed_genres), 0.0) FROM seed_genres sg WHERE sg.genre = ANY(t.genres)
+                       ), 0.0)::float8 AS seed_genre_score,
                        -- Artist affinity
                        COALESCE((
-                           SELECT ua.cnt FROM user_artists ua WHERE ua.artist = t.artist_display
-                       ), 0)::float8 AS artist_score,
+                           SELECT ua.weight FROM user_artists ua WHERE ua.artist = t.artist_display
+                       ), 0.0)::float8 AS artist_score,
                        -- Favourites boost
                        CASE WHEN EXISTS(
                            SELECT 1 FROM favorites f WHERE f.user_id = $1 AND f.track_id = t.id
@@ -127,14 +128,20 @@ impl RecommendationPort for PgRecommendationRepository {
                 LEFT JOIN user_acoustic_centroids uac ON uac.user_id = $1
                 WHERE t.id != ALL($4::uuid[])
                   AND (t.enrichment_status = 'done' OR t.enrichment_status = 'pending')
+                  AND t.id NOT IN (
+                      SELECT track_id FROM listen_events 
+                      WHERE user_id = $1 AND started_at > now() - interval '3 hours'
+                  )
             )
             SELECT id, title, artist_display, album_title, album_id, duration_ms, blob_location
             FROM candidates
             ORDER BY (
-                $5 * (taste_score + seed_genre_score + artist_score + fav_score) +
-                $6 * acoustic_score +
-                0.15 * lastfm_score
-            ) DESC, RANDOM()
+                (
+                    $5 * (taste_score + seed_genre_score + artist_score + fav_score) +
+                    $6 * acoustic_score +
+                    0.15 * lastfm_score
+                ) * (0.75 + RANDOM() * 0.5)
+            ) DESC
             LIMIT $7
             "#,
             user_id,
@@ -309,7 +316,7 @@ struct TrackSummaryRow {
     artist_display: Option<String>,
     album_title: Option<String>,
     album_id: Option<Uuid>,
-    duration_ms: Option<i32>,
+    duration_ms: Option<i64>,
     blob_location: String,
 }
 

@@ -43,6 +43,8 @@ nonzero_ext = { version = "0.3", default-features = false }
 lofty = { version = "0.23", default-features = false }
 notify = { version = "8", default-features = false }
 unicode-normalization = { version = "0.1", default-features = false }
+fastrand = { version = "2.4", default-features = false }
+
 
 [profile.release]
 opt-level = 3
@@ -50,3 +52,24 @@ lto = "fat"
 codegen-units = 1
 strip = "symbols"
 panic = "abort"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+missing_docs_in_private_items = "allow"
+doc_markdown = "allow"
+module_name_repetitions = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+too_many_lines = "allow"
+manual_let_else = "allow"
+format_push_string = "allow"
+items_after_statements = "allow"
+match_same_arms = "allow"
+struct_excessive_bools = "allow"
+unused_async = "allow"
+similar_names = "allow"
+unseparated_literal_suffix = "allow"

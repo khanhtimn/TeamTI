@@ -64,9 +64,8 @@ pub async fn run_classifier(
                 e.path
                     .extension()
                     .and_then(|ex| ex.to_str())
-                    .map(|ex| ex.to_lowercase())
-                    .map(|ex| supported.contains(ex.as_str()))
-                    .unwrap_or(false)
+                    .map(str::to_lowercase)
+                    .is_some_and(|ex| supported.contains(ex.as_str()))
             })
             .collect();
 
@@ -106,9 +105,8 @@ pub async fn run_classifier(
                 let unchanged = db_mt
                     .duration_since(mtime)
                     .or_else(|_| mtime.duration_since(db_mt))
-                    .map(|d| d.as_secs() < 2)
-                    .unwrap_or(false)
-                    && track.file_size_bytes == Some(size_bytes as i64);
+                    .is_ok_and(|d| d.as_secs() < 2)
+                    && track.file_size_bytes == Some(i64::try_from(size_bytes).unwrap_or(0));
 
                 if unchanged {
                     debug!("classifier: skip unchanged {rel}");

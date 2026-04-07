@@ -35,8 +35,8 @@ pub trait UserLibraryPort: Send + Sync {
         &self,
         user_id: &str,
         track_id: Uuid,
-        play_duration_ms: i32,
-        track_duration_ms: i32,
+        play_duration_ms: i64,
+        track_duration_ms: i64,
     ) -> Result<(), AppError>;
     // Internally computes completed = play_duration_ms / track_duration_ms >= THRESHOLD
 
@@ -46,8 +46,8 @@ pub trait UserLibraryPort: Send + Sync {
         &self,
         track_id: Uuid,
         guild_id: &str,
-        play_duration_ms: i32,
-        track_duration_ms: i32,
+        play_duration_ms: i64,
+        track_duration_ms: i64,
     ) -> Result<Vec<String>, AppError>;
 
     async fn recent_history(

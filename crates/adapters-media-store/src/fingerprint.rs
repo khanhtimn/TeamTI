@@ -77,7 +77,7 @@ pub async fn run_fingerprint_worker(
                                     .update_file_identity(
                                         existing.id,
                                         mtime,
-                                        msg.size_bytes as i64,
+                                        i64::try_from(msg.size_bytes).unwrap_or(0),
                                         &rel,
                                     )
                                     .await;
@@ -88,7 +88,7 @@ pub async fn run_fingerprint_worker(
                                     .update_file_identity(
                                         existing.id,
                                         mtime,
-                                        msg.size_bytes as i64,
+                                        i64::try_from(msg.size_bytes).unwrap_or(0),
                                         &rel,
                                     )
                                     .await;
@@ -112,9 +112,13 @@ pub async fn run_fingerprint_worker(
                                 title,
                                 artist_display: raw_tags.artist,
                                 album_id: None,
-                                track_number: raw_tags.track_number.map(|n| n as i32),
-                                disc_number: raw_tags.disc_number.map(|n| n as i32),
-                                duration_ms: Some(duration_ms as i32),
+                                track_number: raw_tags
+                                    .track_number
+                                    .map(|n| i32::try_from(n).unwrap_or(0)),
+                                disc_number: raw_tags
+                                    .disc_number
+                                    .map(|n| i32::try_from(n).unwrap_or(0)),
+                                duration_ms: Some(i64::from(duration_ms)),
                                 genres: raw_tags.genres,
                                 year: raw_tags.year,
                                 bpm: raw_tags.bpm,
@@ -126,7 +130,7 @@ pub async fn run_fingerprint_worker(
                                 codec: raw_tags.codec,
                                 audio_fingerprint: Some(fp.fingerprint.clone()),
                                 file_modified_at: Some(mtime),
-                                file_size_bytes: Some(msg.size_bytes as i64),
+                                file_size_bytes: Some(i64::try_from(msg.size_bytes).unwrap_or(0)),
                                 blob_location: rel.clone(),
                                 mbid: None,
                                 acoustid_id: None,
@@ -138,7 +142,7 @@ pub async fn run_fingerprint_worker(
                                 created_at: chrono::Utc::now(),
                                 updated_at: chrono::Utc::now(),
                                 tags_written_at: None,
-                                analysis_status: Default::default(),
+                                analysis_status: domain::AnalysisStatus::default(),
                                 analysis_attempts: 0,
                                 analysis_locked: false,
                                 analyzed_at: None,

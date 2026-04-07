@@ -55,7 +55,7 @@ impl MediaWatcher {
             // it would drop immediately, clearing the flag before forwarding
             // is complete.
             #[allow(unused_variables)]
-            let _guard = ScanGuard(Arc::clone(&flag));
+            let _ = ScanGuard(Arc::clone(&flag));
 
             match result {
                 Err(errors) => {

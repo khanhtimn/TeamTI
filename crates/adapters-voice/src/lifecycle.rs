@@ -16,7 +16,7 @@ pub enum TrackLifecycleEvent {
     TrackStarted {
         guild_id: GuildId,
         track_id: Uuid,
-        track_duration_ms: Option<i32>,
+        track_duration_ms: Option<i64>,
         users_in_channel: Vec<String>,
     },
     /// A track ended (finished, skipped, or errored). The Discord layer
@@ -24,8 +24,8 @@ pub enum TrackLifecycleEvent {
     TrackEnded {
         guild_id: GuildId,
         track_id: Uuid,
-        track_duration_ms: Option<i32>,
-        play_duration_ms: i32,
+        track_duration_ms: Option<i64>,
+        play_duration_ms: i64,
     },
     /// Radio mode queue is running low. The Discord layer should call
     /// `RecommendationPort::recommend()` and enqueue results.

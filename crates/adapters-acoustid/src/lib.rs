@@ -26,6 +26,7 @@ pub struct AcoustIdAdapter {
 }
 
 impl AcoustIdAdapter {
+    #[must_use]
     pub fn new(api_key: String) -> Self {
         let limiter = Arc::new(RateLimiter::direct(Quota::per_second(nonzero!(1u32))));
         let client = Client::builder()
@@ -78,7 +79,7 @@ impl AcoustIdPort for AcoustIdAdapter {
 
             return Err(AppError::AcoustId {
                 kind,
-                detail: format!("AcoustID returned HTTP {}: {}", status, body_text),
+                detail: format!("AcoustID returned HTTP {status}: {body_text}"),
             });
         }
 
@@ -113,9 +114,9 @@ impl AcoustIdPort for AcoustIdAdapter {
                 .recordings
                 .iter()
                 .min_by_key(|rec| {
-                    rec.duration
-                        .map(|d| (d as i64 - fp.duration_secs as i64).unsigned_abs())
-                        .unwrap_or(u64::MAX)
+                    rec.duration.map_or(u64::MAX, |d| {
+                        (i64::from(d) - i64::from(fp.duration_secs)).unsigned_abs()
+                    })
                 })
                 .unwrap_or(&r.recordings[0]);
 

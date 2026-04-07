@@ -27,7 +27,7 @@ impl MediaScanner {
         let smb_semaphore = Arc::new(Semaphore::new(config.smb_read_concurrency));
         let fp_concurrency = Arc::new(Semaphore::new(config.fingerprint_concurrency));
 
-        let (_watcher, watcher_rx) =
+        let (watcher, watcher_rx) =
             MediaWatcher::start(Arc::clone(&config)).expect("MediaWatcher failed to start");
 
         // Create a merged channel: initial scan + ongoing watcher events
@@ -75,7 +75,7 @@ impl MediaScanner {
         tokio::spawn({
             let tok = token;
             async move {
-                let _keep = _watcher;
+                let _keep = watcher;
                 tok.cancelled().await;
             }
         });
@@ -105,7 +105,7 @@ async fn run_initial_scan(
         let walker = walkdir::WalkDir::new(&root)
             .follow_links(true)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|e| e.file_type().is_file());
 
         for entry in walker {
@@ -123,9 +123,8 @@ async fn run_initial_scan(
         let is_audio = path
             .extension()
             .and_then(|ex| ex.to_str())
-            .map(|ex| ex.to_lowercase())
-            .map(|ex| supported.contains(ex.as_str()))
-            .unwrap_or(false);
+            .map(str::to_lowercase)
+            .is_some_and(|ex| supported.contains(ex.as_str()));
 
         if !is_audio {
             continue;
@@ -168,8 +167,8 @@ where
     tokio::spawn(async move {
         tokio::select! {
             biased;
-            _ = token.cancelled() => {}
-            _ = fut => {}
+            () = token.cancelled() => {}
+            () = fut => {}
         }
     });
 }

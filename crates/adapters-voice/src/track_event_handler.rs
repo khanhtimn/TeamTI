@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use serenity::all::Http;
@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 use crate::lifecycle::{TrackLifecycleEvent, TrackLifecycleTx};
 use crate::player::leave_channel;
-use crate::state::GuildMusicState;
+use crate::state::{GuildMusicState, QueueSource, QueuedTrack};
 use crate::state_map::GuildStateMap;
 
 /// Attached to every track's `TrackEvent::End` and `TrackEvent::Error`.
@@ -63,16 +63,10 @@ impl SongbirdEventHandler for TrackEventHandler {
         // Songbird already popped its own TrackQueue entry via QueueHandler.
         // WI-2: If pop_front returns None, the queue was already empty —
         // /clear or /leave already posted "Queue Ended". Don't double-post.
-        let finished_track = match state.meta_queue.pop_front() {
-            Some(t) => t,
-            None => return None,
-        };
+        let finished_track = state.meta_queue.pop_front()?;
 
-        // ── Emit TrackEnded lifecycle event ────────────────────────────
-        let play_duration_ms = state
-            .track_started_at
-            .map(|started| Instant::now().duration_since(started).as_millis() as i32)
-            .unwrap_or(0);
+        // ── Emit TrackEnded lifecycle event (pause-aware duration) ──────
+        let play_duration_ms = state.actual_play_ms();
 
         let _ = self.lifecycle_tx.send(TrackLifecycleEvent::TrackEnded {
             guild_id: self.guild_id,
@@ -80,6 +74,9 @@ impl SongbirdEventHandler for TrackEventHandler {
             track_duration_ms: finished_track.duration_ms,
             play_duration_ms,
         });
+
+        // Cancel the NP auto-update task for the finished track
+        state.cancel_np_update();
 
         if state.meta_queue.is_empty() {
             // ── Check radio refill before auto-leave ──────────────────
@@ -100,6 +97,8 @@ impl SongbirdEventHandler for TrackEventHandler {
             state.cancel_auto_leave();
             state.auto_leave_token = Some(token.clone());
             state.track_started_at = None;
+            state.paused_at = None;
+            state.total_paused_ms = 0;
 
             let http = Arc::clone(&self.http);
             let guild_id = self.guild_id;
@@ -118,15 +117,13 @@ impl SongbirdEventHandler for TrackEventHandler {
             tokio::spawn(async move {
                 tokio::select! {
                     biased;
-                    _ = token.cancelled() => {
+                    () = token.cancelled() => {
                         // A new track was enqueued — cancel timer
                     }
-                    _ = tokio::time::sleep(Duration::from_secs(secs)) => {
+                    () = tokio::time::sleep(Duration::from_secs(secs)) => {
+                        // C4 audit fix: use shared cleanup to match /leave behavior
                         let mut state = state_lock.lock().await;
-                        state.voice_channel_id = None;
-                        state.now_playing_msg  = None;
-                        state.radio_mode       = false;
-                        state.radio_user_id    = None;
+                        state.cleanup_on_leave();
                         drop(state);
                         let _ = leave_channel(&songbird, guild_id).await;
                         info!(
@@ -142,8 +139,8 @@ impl SongbirdEventHandler for TrackEventHandler {
             // Update the "Now Playing" embed to the new front of the queue.
             let next_track = state.meta_queue.front().cloned();
 
-            // Record when the new track started
-            state.track_started_at = Some(Instant::now());
+            // Reset timing for the new track
+            state.reset_track_timing();
 
             // ── Radio refill check: ≤ RADIO_REFILL_THRESHOLD tracks remaining ──
             if state.radio_mode
@@ -171,10 +168,7 @@ impl SongbirdEventHandler for TrackEventHandler {
                                 .iter()
                                 .filter(|vs| vs.channel_id == Some(channel_id))
                                 .filter(|vs| {
-                                    !g.members
-                                        .get(&vs.user_id)
-                                        .map(|m| m.user.bot())
-                                        .unwrap_or(false)
+                                    !g.members.get(&vs.user_id).is_some_and(|m| m.user.bot())
                                 })
                                 .map(|vs| vs.user_id.to_string())
                                 .collect()
@@ -190,18 +184,10 @@ impl SongbirdEventHandler for TrackEventHandler {
                 });
             }
 
-            if let Some(channel_id) = state.text_channel_id {
-                let msg_id = state.now_playing_msg;
-                drop(state);
-                post_now_playing(
-                    &self.http,
-                    channel_id,
-                    self.guild_id,
-                    &state_lock,
-                    next_track.as_ref(),
-                    msg_id,
-                )
-                .await;
+            if state.text_channel_id.is_some() {
+                // Just clear the NP update state.
+                // The new NP message will be posted by the lifecycle worker responding to TrackStarted.
+                state.cancel_np_update();
             } else {
                 drop(state);
             }
@@ -210,6 +196,193 @@ impl SongbirdEventHandler for TrackEventHandler {
         None
     }
 }
+
+// ── NP Auto-Update Task ─────────────────────────────────────────────────
+
+/// Background task that edits the NP message every 5 seconds with
+/// an updated progress bar. Cancelled by CancellationToken when a new
+/// track starts or the bot leaves.
+pub async fn np_auto_update_task(
+    cancel: CancellationToken,
+    http: Arc<Http>,
+    channel_id: ChannelId,
+    guild_id: GuildId,
+    message_id: MessageId,
+    state: Arc<Mutex<GuildMusicState>>,
+) {
+    let interval = Duration::from_secs(1);
+    loop {
+        tokio::select! {
+            biased;
+            () = cancel.cancelled() => break,
+            () = tokio::time::sleep(interval) => {
+                // O1 audit fix: skip the edit when paused — nothing has
+                // changed visually, saves Discord API budget.
+                let (embed, is_paused) = {
+                    let s = state.lock().await;
+                    if s.is_paused() {
+                        continue;
+                    }
+                    let track = s.meta_queue.front();
+                    (build_np_embed(track, &s), s.is_paused())
+                };
+
+                let action_row = build_np_action_buttons(guild_id, is_paused);
+
+                let edit = serenity::builder::EditMessage::new()
+                    .embed(embed)
+                    .components(vec![action_row]);
+
+                let _ = edit
+                    .execute(&http, channel_id.into(), message_id, None)
+                    .await;
+                // Ignore edit errors (message may have been deleted by user)
+            }
+        }
+    }
+}
+
+fn build_np_action_buttons(
+    guild_id: GuildId,
+    is_paused: bool,
+) -> serenity::builder::CreateComponent<'static> {
+    use serenity::builder::{CreateActionRow, CreateButton, CreateComponent};
+    use serenity::model::application::ButtonStyle;
+
+    let prev = CreateButton::new("np_dummy_prev")
+        .label("⏮ Prev")
+        .style(ButtonStyle::Secondary)
+        .disabled(true);
+
+    let pause_resume = CreateButton::new(format!("np|pause|{}", guild_id))
+        .label(if is_paused { "▶ Resume" } else { "⏸ Pause" })
+        .style(if is_paused {
+            ButtonStyle::Success
+        } else {
+            ButtonStyle::Secondary
+        });
+
+    let skip = CreateButton::new(format!("np|skip|{}", guild_id))
+        .label("⏭ Next")
+        .style(ButtonStyle::Secondary);
+
+    CreateComponent::ActionRow(CreateActionRow::Buttons(
+        vec![prev, pause_resume, skip].into(),
+    ))
+}
+
+// ── NP Embed Construction ───────────────────────────────────────────────
+
+/// Build a rich Now Playing embed with progress bar, state colors, and
+/// next-up footer.
+pub fn build_np_embed<'a>(
+    track: Option<&QueuedTrack>,
+    state: &GuildMusicState,
+) -> serenity::builder::CreateEmbed<'a> {
+    use serenity::builder::{CreateEmbed, CreateEmbedFooter};
+
+    match track {
+        Some(t) => {
+            let is_paused = state.is_paused();
+
+            // Title prefix
+            let title = if is_paused {
+                "⏸  PAUSED"
+            } else if state.radio_mode {
+                "📻  NOW PLAYING (Radio)"
+            } else {
+                "▶  NOW PLAYING"
+            };
+
+            // Color: green playing, amber paused
+            let color = if is_paused { 0x00FA_A61A } else { 0x001D_B954 };
+
+            // Description: track title + artist
+            let description = format!("**{}**\n{}", t.title, t.artist);
+
+            // Progress bar
+            let total_ms = t.duration_ms.unwrap_or(0).max(0);
+            let elapsed_ms = state.actual_play_ms();
+            let bar = progress_bar(elapsed_ms, total_ms, 20, is_paused);
+            let progress_line = format!(
+                "{bar}  {}  /  {}",
+                format_duration_ms(elapsed_ms),
+                format_duration_ms(total_ms)
+            );
+
+            // Queue info for footer
+            let queue_len = state.meta_queue.len();
+            let footer_text = if queue_len >= 2 {
+                let next = &state.meta_queue[1];
+                format!("Next: {} — {}", next.title, next.artist)
+            } else {
+                "No tracks queued".to_string()
+            };
+
+            // Added-by info
+            let added_by_str = if t.source == QueueSource::Radio {
+                "🎲 radio".to_string()
+            } else if t.added_by.is_empty() {
+                String::new()
+            } else {
+                format!("Added by <@{}>", t.added_by)
+            };
+
+            let mut embed = CreateEmbed::new()
+                .title(title)
+                .description(description)
+                .color(color)
+                .field("", progress_line, false);
+
+            if !added_by_str.is_empty() {
+                embed = embed.field("", added_by_str, false);
+            }
+
+            embed = embed.footer(CreateEmbedFooter::new(footer_text));
+
+            embed
+        }
+        None => serenity::builder::CreateEmbed::new()
+            .title("Queue Ended")
+            .description("No more tracks in queue.")
+            .color(0x0074_7F8D)
+            .footer(serenity::builder::CreateEmbedFooter::new(
+                "Bot will leave shortly unless a track is queued.",
+            )),
+    }
+}
+
+/// Generates a Unicode progress bar.
+#[must_use]
+pub fn progress_bar(elapsed_ms: i64, total_ms: i64, width: usize, is_paused: bool) -> String {
+    if total_ms <= 0 || width == 0 {
+        return "─".repeat(width);
+    }
+    let ratio = (elapsed_ms as f64 / total_ms as f64).clamp(0.0, 1.0);
+    let filled = (ratio * width as f64).round() as usize;
+    let filled = filled.min(width.saturating_sub(1)); // always leave room for cursor
+    let cursor = if is_paused { "⏸" } else { "●" };
+    format!(
+        "{}{}{}",
+        "━".repeat(filled),
+        cursor,
+        "─".repeat(width.saturating_sub(filled + 1))
+    )
+}
+
+/// Format milliseconds as M:SS (e.g. "2:34"). Returns "--:--" for ≤0.
+#[must_use]
+pub fn format_duration_ms(ms: i64) -> String {
+    if ms <= 0 {
+        return "--:--".to_string();
+    }
+    let total_secs = ms / 1000;
+    let mins = total_secs / 60;
+    let secs = total_secs % 60;
+    format!("{mins}:{secs:02}")
+}
+
+// ── Post Helpers ────────────────────────────────────────────────────────
 
 /// Post or edit the now-playing embed in the text channel.
 /// `track = None` renders a "Queue Ended" embed.
@@ -223,104 +396,88 @@ pub async fn post_now_playing(
 ) {
     use serenity::builder::{CreateMessage, EditMessage};
 
-    let embed = build_now_playing_embed(track, state_lock).await;
+    let (embed, is_paused) = {
+        let state = state_lock.lock().await;
+        (build_np_embed(track, &state), state.is_paused())
+    };
 
-    match existing_msg_id {
-        Some(msg_id) => {
-            let edit = EditMessage::new().embed(embed);
-            if let Err(e) = edit.execute(http, channel_id.into(), msg_id, None).await {
+    if let Some(msg_id) = existing_msg_id {
+        let edit = EditMessage::new().embed(embed);
+        let edit = if track.is_some() {
+            edit.components(vec![build_np_action_buttons(guild_id, is_paused)])
+        } else {
+            edit.components(vec![])
+        };
+
+        if let Err(e) = edit.execute(http, channel_id.into(), msg_id, None).await {
+            warn!(
+                guild_id   = %guild_id,
+                channel_id = %channel_id,
+                error      = %e,
+                operation  = "now_playing.edit",
+                "failed to edit now-playing message"
+            );
+        }
+    } else {
+        let msg = CreateMessage::new().embed(embed);
+        let msg = if track.is_some() {
+            msg.components(vec![build_np_action_buttons(guild_id, is_paused)])
+        } else {
+            msg
+        };
+        match msg.execute(http, channel_id.into()).await {
+            Ok(sent) => {
+                let mut state = state_lock.lock().await;
+                state.now_playing_msg = Some(sent.id);
+            }
+            Err(e) => {
                 warn!(
-                    guild_id   = %guild_id,
-                    channel_id = %channel_id,
-                    error      = %e,
-                    operation  = "now_playing.edit",
-                    "failed to edit now-playing message"
+                    guild_id  = %guild_id,
+                    error     = %e,
+                    operation = "now_playing.post",
+                    "failed to post now-playing message"
                 );
-            }
-        }
-        None => {
-            let msg = CreateMessage::new().embed(embed);
-            match msg.execute(http, channel_id.into()).await {
-                Ok(sent) => {
-                    let mut state = state_lock.lock().await;
-                    state.now_playing_msg = Some(sent.id);
-                }
-                Err(e) => {
-                    warn!(
-                        guild_id  = %guild_id,
-                        error     = %e,
-                        operation = "now_playing.post",
-                        "failed to post now-playing message"
-                    );
-                }
             }
         }
     }
 }
 
-async fn build_now_playing_embed<'a>(
-    track: Option<&'a crate::state::QueuedTrack>,
-    state_lock: &'a Arc<Mutex<GuildMusicState>>,
-) -> serenity::builder::CreateEmbed<'a> {
-    use serenity::builder::CreateEmbed;
+/// Post a *new* NP embed (never edits). Returns the message ID if successful.
+/// Used on track start to always post a new message (old one left stale per spec).
+pub async fn post_now_playing_new(
+    http: &Http,
+    channel_id: ChannelId,
+    guild_id: GuildId,
+    state_lock: &Arc<Mutex<GuildMusicState>>,
+    track: Option<&QueuedTrack>,
+) -> Option<MessageId> {
+    use serenity::builder::CreateMessage;
 
-    let state = state_lock.lock().await;
-    let queue_len = state.meta_queue.len();
-    let radio = state.radio_mode;
-    drop(state);
+    let (embed, is_paused) = {
+        let state = state_lock.lock().await;
+        (build_np_embed(track, &state), state.is_paused())
+    };
 
-    match track {
-        Some(t) => {
-            let duration_str = t
-                .duration_ms
-                .map(format_duration)
-                .unwrap_or_else(|| "Unknown".to_string());
-
-            let description = format!("**{}**\n{}", t.title, t.artist);
-
-            let mut embed = CreateEmbed::new()
-                .title(if radio {
-                    "📻  Now Playing (Radio)"
-                } else {
-                    "▶  Now Playing"
-                })
-                .description(description)
-                .color(if radio { 0xE91E63 } else { 0x1DB954 });
-
-            if let Some(ref album) = t.album {
-                embed = embed.field("Album", album, true);
-            }
-            embed = embed.field("Duration", duration_str, true);
-
-            // queue_len includes the current track; remaining = len - 1
-            let remaining = queue_len.saturating_sub(1);
-            if remaining > 0 {
-                embed = embed.field(
-                    "Up Next",
-                    format!(
-                        "{} track{} in queue",
-                        remaining,
-                        if remaining == 1 { "" } else { "s" }
-                    ),
-                    false,
-                );
-            }
-
-            embed
+    let msg = CreateMessage::new().embed(embed);
+    let msg = if track.is_some() {
+        msg.components(vec![build_np_action_buttons(guild_id, is_paused)])
+    } else {
+        msg
+    };
+    match msg.execute(http, channel_id.into()).await {
+        Ok(sent) => {
+            let mut state = state_lock.lock().await;
+            state.now_playing_msg = Some(sent.id);
+            Some(sent.id)
         }
-        None => CreateEmbed::new()
-            .title("Queue Ended")
-            .description("No more tracks in queue.")
-            .color(0x747F8D)
-            .footer(serenity::builder::CreateEmbedFooter::new(
-                "Bot will leave shortly unless a track is queued.",
-            )),
+        Err(e) => {
+            warn!(
+                guild_id  = %guild_id,
+                error     = %e,
+                operation = "now_playing.post_new",
+                "failed to post now-playing message"
+            );
+            None
+        }
     }
-}
-
-fn format_duration(ms: i32) -> String {
-    let total_secs = ms / 1000;
-    let minutes = total_secs / 60;
-    let seconds = total_secs % 60;
-    format!("{minutes}:{seconds:02}")
 }

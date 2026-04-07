@@ -31,6 +31,7 @@ pub const BLISS_VECTOR_DIMS: usize = NUMBER_FEATURES;
 pub struct BlissAnalysisAdapter;
 
 impl BlissAnalysisAdapter {
+    #[must_use]
     pub fn new() -> Self {
         Self
     }

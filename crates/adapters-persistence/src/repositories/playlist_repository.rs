@@ -17,6 +17,7 @@ pub struct PgPlaylistRepository {
 }
 
 impl PgPlaylistRepository {
+    #[must_use]
     pub fn new(db: Database) -> Self {
         Self { db }
     }
@@ -28,14 +29,11 @@ impl PgPlaylistRepository {
             .await
             .map_err(db_err!("playlist.check_write_access"))?;
 
-        let owner_id = match row {
-            Some(owner) => owner,
-            None => {
-                return Err(AppError::Playlist {
-                    kind: PlaylistErrorKind::NotFound,
-                    detail: format!("playlist {playlist_id} not found"),
-                });
-            }
+        let Some(owner_id) = row else {
+            return Err(AppError::Playlist {
+                kind: PlaylistErrorKind::NotFound,
+                detail: format!("playlist {playlist_id} not found"),
+            });
         };
 
         if owner_id == user_id {
@@ -84,14 +82,11 @@ impl PgPlaylistRepository {
         .await
         .map_err(db_err!("playlist.check_read_access"))?;
 
-        let access = match row {
-            Some(a) => a,
-            None => {
-                return Err(AppError::Playlist {
-                    kind: PlaylistErrorKind::NotFound,
-                    detail: format!("playlist {playlist_id} not found"),
-                });
-            }
+        let Some(access) = row else {
+            return Err(AppError::Playlist {
+                kind: PlaylistErrorKind::NotFound,
+                detail: format!("playlist {playlist_id} not found"),
+            });
         };
 
         if access.owner_id == user_id || access.visibility == "public" {
@@ -128,6 +123,16 @@ impl PlaylistPort for PgPlaylistRepository {
         name: &str,
         description: Option<&str>,
     ) -> Result<Playlist, AppError> {
+        #[derive(sqlx::FromRow)]
+        struct PlaylistRow {
+            id: Uuid,
+            name: String,
+            owner_id: String,
+            visibility: String,
+            description: Option<String>,
+            created_at: chrono::DateTime<chrono::Utc>,
+            updated_at: chrono::DateTime<chrono::Utc>,
+        }
         // Check for duplicate name for this owner
         let exists: bool = sqlx::query_scalar!(
             r#"SELECT EXISTS(SELECT 1 FROM playlists WHERE owner_id = $1 AND name = $2) AS "exists!""#,
@@ -143,17 +148,6 @@ impl PlaylistPort for PgPlaylistRepository {
                 kind: PlaylistErrorKind::AlreadyExists,
                 detail: format!("playlist '{name}' already exists for user {owner_id}"),
             });
-        }
-
-        #[derive(sqlx::FromRow)]
-        struct PlaylistRow {
-            id: Uuid,
-            name: String,
-            owner_id: String,
-            visibility: String,
-            description: Option<String>,
-            created_at: chrono::DateTime<chrono::Utc>,
-            updated_at: chrono::DateTime<chrono::Utc>,
         }
 
         let row = sqlx::query_as!(
@@ -433,7 +427,7 @@ impl PlaylistPort for PgPlaylistRepository {
             PlaylistItemWithTrack,
             r#"SELECT pi.id AS item_id, pi.playlist_id, pi.track_id, pi.position,
                     pi.added_by, pi.added_at,
-                    t.title, t.artist_display, a.title AS album_title,
+                    t.title, t.artist_display, a.title AS "album_title?",
                     t.album_id, t.duration_ms, t.blob_location
              FROM playlist_items pi
              JOIN tracks t ON t.id = pi.track_id
@@ -490,7 +484,7 @@ impl PlaylistPort for PgPlaylistRepository {
 
         let rows = sqlx::query_as!(
             TrackSummaryRow,
-            r#"SELECT t.id, t.title, t.artist_display, a.title AS album_title,
+            r#"SELECT t.id, t.title, t.artist_display, a.title AS "album_title?",
                     t.album_id, t.duration_ms, t.blob_location
              FROM playlist_items pi
              JOIN tracks t ON t.id = pi.track_id
@@ -687,7 +681,7 @@ struct PlaylistItemWithTrack {
     artist_display: Option<String>,
     album_title: Option<String>,
     album_id: Option<Uuid>,
-    duration_ms: Option<i32>,
+    duration_ms: Option<i64>,
     blob_location: String,
 }
 
@@ -698,7 +692,7 @@ struct TrackSummaryRow {
     artist_display: Option<String>,
     album_title: Option<String>,
     album_id: Option<Uuid>,
-    duration_ms: Option<i32>,
+    duration_ms: Option<i64>,
     blob_location: String,
 }
 

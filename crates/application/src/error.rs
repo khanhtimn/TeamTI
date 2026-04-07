@@ -60,6 +60,7 @@ impl PersistenceError {
     }
 
     /// Whether this persistence error is transient and warrants retry.
+    #[must_use]
     pub fn is_transient(&self) -> bool {
         matches!(
             self.kind,
@@ -372,6 +373,7 @@ pub enum SearchErrorKind {
 impl AppError {
     /// Returns a stable, machine-readable string identifying the error kind.
     /// Used as the `error.kind` structured log field.
+    #[must_use]
     pub fn kind_str(&self) -> &'static str {
         match self {
             AppError::Persistence(e) => match e.kind {
@@ -466,7 +468,6 @@ impl Retryable for AppError {
         match self {
             // Transient infrastructure failures — retry if pool/connection issue
             AppError::Persistence(e) => e.is_transient(),
-            AppError::Io { .. } => false, // file errors are permanent
 
             // API errors — depends on kind
             AppError::Voice { kind, .. } => matches!(kind, VoiceErrorKind::JoinFailed),
@@ -498,25 +499,23 @@ impl Retryable for AppError {
             ),
 
             // Analysis/LastFm — non-fatal, not retryable in enrichment context
-            AppError::Analysis { .. } => false,
             AppError::LastFm { kind, .. } => matches!(
                 kind,
                 LastFmErrorKind::RateLimited | LastFmErrorKind::ApiError
             ),
 
-            // Domain errors — not retryable
+            // Domain and pipeline errors — not retryable
             AppError::TrackNotFound { .. }
             | AppError::AlbumNotFound { .. }
             | AppError::DuplicateTrack { .. }
             | AppError::Playlist { .. }
-            | AppError::Config { .. } => false,
-
-            // Pipeline errors — not retryable; source must be investigated
-            AppError::Fingerprint { .. } | AppError::TagRead { .. } | AppError::TagWrite { .. } => {
-                false
-            }
-
-            AppError::WatcherInit { .. } => false,
+            | AppError::Config { .. }
+            | AppError::Fingerprint { .. }
+            | AppError::TagRead { .. }
+            | AppError::TagWrite { .. }
+            | AppError::Analysis { .. }
+            | AppError::Io { .. }
+            | AppError::WatcherInit { .. } => false,
         }
     }
 
@@ -544,7 +543,7 @@ impl Retryable for AppError {
             AppError::AcoustId {
                 kind: AcoustIdErrorKind::ServiceUnavailable,
                 ..
-            } => Some(Duration::from_secs(60)),
+            } => Some(Duration::from_mins(1)),
             _ => None,
         }
     }

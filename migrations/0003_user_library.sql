@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS listen_events (
     started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- NULL until the event is closed (track ends, skipped, or bot leaves vc)
     -- Set to elapsed playback time, not wall time.
-    play_duration_ms INTEGER,
+    play_duration_ms BIGINT,
     -- Computed at event close: play_duration_ms / tracks.duration_ms >= 0.8
     -- (The 0.8 threshold is a named constant in the application layer.)
     completed       BOOLEAN NOT NULL DEFAULT false

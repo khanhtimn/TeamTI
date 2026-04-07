@@ -23,40 +23,39 @@ pub async fn run(
     let guild_id = interaction.guild_id.unwrap_or_default();
     let user_id = interaction.user.id.to_string();
 
-    let state_lock = match guild_state.get(&guild_id) {
-        Some(s) => s.clone(),
-        None => {
-            let _ = interaction
-                .edit_response(
-                    http,
-                    EditInteractionResponse::new()
-                        .content("Nothing is playing — queue a track first or let radio seed from your taste profile."),
-                )
-                .await;
+    let state_lock = if let Some(s) = guild_state.get(&guild_id) {
+        s.clone()
+    } else {
+        let _ = interaction
+            .edit_response(
+                http,
+                EditInteractionResponse::new()
+                    .content("Nothing is playing — queue a track first or let radio seed from your taste profile."),
+            )
+            .await;
 
-            // Even with nothing playing, we can start radio mode — the
-            // lifecycle worker will seed from the user's taste profile.
-            let state_lock = guild_state
-                .entry(guild_id)
-                .or_insert_with(|| {
-                    Arc::new(tokio::sync::Mutex::new(
-                        adapters_voice::state::GuildMusicState::new(),
-                    ))
-                })
-                .clone();
-            let mut state = state_lock.lock().await;
-            state.radio_mode = true;
-            state.radio_user_id = Some(user_id.clone());
-            drop(state);
+        // Even with nothing playing, we can start radio mode — the
+        // lifecycle worker will seed from the user's taste profile.
+        let state_lock = guild_state
+            .entry(guild_id)
+            .or_insert_with(|| {
+                Arc::new(tokio::sync::Mutex::new(
+                    adapters_voice::state::GuildMusicState::new(),
+                ))
+            })
+            .clone();
+        let mut state = state_lock.lock().await;
+        state.radio_mode = true;
+        state.radio_user_id = Some(user_id.clone());
+        drop(state);
 
-            let _ = lifecycle_tx.send(TrackLifecycleEvent::RadioRefillNeeded {
-                guild_id,
-                user_id: user_id.clone(),
-                seed_track_id: None,
-            });
+        let _ = lifecycle_tx.send(TrackLifecycleEvent::RadioRefillNeeded {
+            guild_id,
+            user_id: user_id.clone(),
+            seed_track_id: None,
+        });
 
-            return;
-        }
+        return;
     };
 
     let mut state = state_lock.lock().await;

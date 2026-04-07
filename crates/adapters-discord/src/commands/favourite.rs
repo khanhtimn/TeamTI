@@ -74,7 +74,7 @@ pub async fn run(
                 &user_id,
                 subcmd,
             )
-            .await
+            .await;
         }
         "remove" => {
             run_remove(
@@ -85,7 +85,7 @@ pub async fn run(
                 &user_id,
                 subcmd,
             )
-            .await
+            .await;
         }
         "list" => run_list(http, interaction, user_library_port, &user_id).await,
         _ => {}

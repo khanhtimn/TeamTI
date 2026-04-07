@@ -117,12 +117,7 @@ pub async fn enqueue_track(
                         g.voice_states
                             .iter()
                             .filter(|vs| vs.channel_id == Some(channel_id))
-                            .filter(|vs| {
-                                !g.members
-                                    .get(&vs.user_id)
-                                    .map(|m| m.user.bot())
-                                    .unwrap_or(false)
-                            })
+                            .filter(|vs| !g.members.get(&vs.user_id).is_some_and(|m| m.user.bot()))
                             .map(|vs| vs.user_id.to_string())
                             .collect()
                     })

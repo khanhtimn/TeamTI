@@ -27,8 +27,8 @@ impl LastFmWorker {
         // We can check local config via std::env::var("LASTFM_API_KEY").
         let has_api_key = std::env::var("LASTFM_API_KEY")
             .ok()
-            .filter(|s| !s.is_empty())
-            .is_some();
+            .as_ref()
+            .is_some_and(|s| !s.is_empty());
         if !has_api_key {
             warn!(
                 operation = "lastfm_worker.start",

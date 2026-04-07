@@ -35,13 +35,10 @@ pub async fn run(
             return;
         }
 
-        // Cancel any pending auto-leave timer
-        state.cancel_auto_leave();
+        // C4 audit fix: use shared cleanup to ensure identical teardown
+        // as auto-leave timer. Songbird queue is cleared in leave_channel().
+        state.cleanup_on_leave();
 
-        // Clear our metadata mirror — Songbird queue is cleared inside leave_channel()
-        state.meta_queue.clear();
-        state.voice_channel_id = None;
-        state.now_playing_msg = None;
         drop(state);
     } else {
         let _ = interaction
@@ -55,7 +52,7 @@ pub async fn run(
 
     // leave_channel() calls queue().stop() then songbird.leave()
     match adapters_voice::player::leave_channel(songbird, guild_id).await {
-        Ok(_) => {
+        Ok(()) => {
             let _ = interaction
                 .edit_response(
                     http,

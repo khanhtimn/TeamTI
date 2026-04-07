@@ -742,12 +742,13 @@ impl TrackRepository for PgTrackRepository {
     // ── Last.fm similarity cache ─────────────────────────────────────
 
     async fn get_cached_similar_artists(&self, mbids: &[String]) -> Result<Vec<String>, AppError> {
-        if mbids.is_empty() {
-            return Ok(Vec::new());
-        }
         struct RowResult {
             source_mbid: Option<String>,
         }
+        if mbids.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let rows = sqlx::query_as!(
             RowResult,
             r#"

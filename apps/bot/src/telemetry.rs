@@ -16,7 +16,7 @@ impl FromStr for LogFormat {
             "compact" => Ok(LogFormat::Compact),
             "pretty" => Ok(LogFormat::Pretty),
             "json" => Ok(LogFormat::Json),
-            _ => Err(format!("unknown format: {}", s)),
+            _ => Err(format!("unknown format: {s}")),
         }
     }
 }

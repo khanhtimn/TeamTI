@@ -1,13 +1,14 @@
+use std::sync::Arc;
+
 use serenity::builder::{CreateCommand, EditInteractionResponse};
 use serenity::model::application::CommandInteraction;
 use serenity::model::permissions::Permissions;
-use std::sync::Arc;
 
 use adapters_voice::state_map::GuildStateMap;
 
 pub fn register() -> CreateCommand<'static> {
-    CreateCommand::new("clear")
-        .description("Clear the music queue (keeps the currently playing track)")
+    CreateCommand::new("pause")
+        .description("Pause the currently playing track")
         .default_member_permissions(Permissions::SEND_MESSAGES)
 }
 
@@ -27,42 +28,45 @@ pub async fn run(
         let _ = interaction
             .edit_response(
                 http,
-                EditInteractionResponse::new().content("No active playback in this server."),
+                EditInteractionResponse::new()
+                    .content("The bot isn't in a voice channel. Use /play to start."),
             )
             .await;
         return;
     };
 
-    let state = state_lock.lock().await;
+    let mut state = state_lock.lock().await;
 
-    if state.meta_queue.len() <= 1 {
+    if state.meta_queue.is_empty() {
         let _ = interaction
             .edit_response(
                 http,
-                EditInteractionResponse::new().content("The queue is already empty."),
+                EditInteractionResponse::new().content("Nothing is currently playing."),
             )
             .await;
         return;
     }
 
-    // Keep position 0 (currently playing), clear positions 1..end
-    let cleared_count = state.meta_queue.len() - 1;
+    if state.is_paused() {
+        let _ = interaction
+            .edit_response(
+                http,
+                EditInteractionResponse::new().content("Already paused. Use /resume to continue."),
+            )
+            .await;
+        return;
+    }
+
+    // Record pause timestamp
+    state.paused_at = Some(std::time::Instant::now());
     drop(state);
 
-    // Remove from Songbird's queue (positions 1..end)
+    // Pause Songbird's queue
     if let Some(handler_lock) = songbird.get(guild_id) {
-        let handler = handler_lock.lock().await;
-        handler.queue().modify_queue(|q| {
-            q.drain(1..);
-        });
+        let _ = handler_lock.lock().await.queue().pause();
     }
 
     let _ = interaction
-        .edit_response(
-            http,
-            EditInteractionResponse::new().content(format!(
-                "🗑️ Queue cleared ({cleared_count} tracks removed)."
-            )),
-        )
+        .edit_response(http, EditInteractionResponse::new().content("⏸ Paused."))
         .await;
 }

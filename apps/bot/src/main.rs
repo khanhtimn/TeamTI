@@ -88,7 +88,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     let analysis_reset = track_repo
-        .unlock_stale_analysis_rows(std::time::Duration::from_secs(3600))
+        .unlock_stale_analysis_rows(std::time::Duration::from_hours(1))
         .await
         .expect("stale analyzing watchdog failed");
     if analysis_reset > 0 {
@@ -134,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = CancellationToken::new();
 
     // 1. Start scan pipeline — returns TrackScanned receiver and SMB semaphore
-    let (scan_rx, _smb_semaphore) = MediaScanner::start(
+    let (scan_rx, smb_semaphore) = MediaScanner::start(
         Arc::clone(&config),
         Arc::clone(&track_repo) as Arc<dyn TrackRepository>,
         token.clone(),
@@ -159,8 +159,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             tokio::select! {
                 biased;
-                _ = tok.cancelled() => {}
-                _ = worker.run(acoustid_rx, mb_tx) => {}
+                () = tok.cancelled() => {}
+                () = worker.run(acoustid_rx, mb_tx) => {}
             }
         });
     }
@@ -178,8 +178,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             tokio::select! {
                 biased;
-                _ = tok.cancelled() => {}
-                _ = worker.run(mb_rx, lastfm_tx) => {}
+                () = tok.cancelled() => {}
+                () = worker.run(mb_rx, lastfm_tx) => {}
             }
         });
     }
@@ -199,8 +199,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             tokio::select! {
                 biased;
-                _ = tok.cancelled() => {}
-                _ = worker.run(lastfm_rx, lyrics_tx) => {}
+                () = tok.cancelled() => {}
+                () = worker.run(lastfm_rx, lyrics_tx) => {}
             }
         });
     }
@@ -214,8 +214,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             tokio::select! {
                 biased;
-                _ = tok.cancelled() => {}
-                _ = worker.run(lyrics_rx, cover_tx) => {}
+                () = tok.cancelled() => {}
+                () = worker.run(lyrics_rx, cover_tx) => {}
             }
         });
     }
@@ -232,8 +232,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             tokio::select! {
                 biased;
-                _ = tok.cancelled() => {}
-                _ = worker.run(cover_rx) => {}
+                () = tok.cancelled() => {}
+                () = worker.run(cover_rx) => {}
             }
         });
     }
@@ -242,7 +242,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let file_tag_writer = Arc::new(FileTagWriterAdapter {
             media_root: config.media_root.clone(),
-            smb_semaphore: Arc::clone(&_smb_semaphore),
+            smb_semaphore: Arc::clone(&smb_semaphore),
         });
         let worker = Arc::new(TagWriterWorker {
             tag_writer: file_tag_writer,
@@ -256,8 +256,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             tokio::select! {
                 biased;
-                _ = tok.cancelled() => {}
-                _ = worker.run(tag_writer_rx) => {}
+                () = tok.cancelled() => {}
+                () = worker.run(tag_writer_rx) => {}
             }
         });
     }
@@ -271,8 +271,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             tokio::select! {
                 biased;
-                _ = tok.cancelled() => {}
-                _ = run_startup_tag_poller(repo, tx, secs) => {}
+                () = tok.cancelled() => {}
+                () = run_startup_tag_poller(repo, tx, secs) => {}
             }
         });
     }
@@ -280,6 +280,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 3. Enrichment Orchestrator
     let orchestrator = Arc::new(EnrichmentOrchestrator {
         repo: Arc::clone(&track_repo) as Arc<dyn TrackRepository>,
+        search_port: Arc::clone(&search_port),
         scan_interval_secs: config.scan_interval_secs,
         failed_retry_limit: config.failed_retry_limit,
         unmatched_retry_limit: config.unmatched_retry_limit,
@@ -290,8 +291,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             tokio::select! {
                 biased;
-                _ = tok.cancelled() => {}
-                _ = o.run(scan_rx, acoustid_tx) => {}
+                () = tok.cancelled() => {}
+                () = o.run(scan_rx, acoustid_tx) => {}
             }
         });
     }
@@ -310,8 +311,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             tokio::select! {
                 biased;
-                _ = tok.cancelled() => {}
-                _ = worker.run() => {}
+                () = tok.cancelled() => {}
+                () = worker.run() => {}
             }
         });
     }
@@ -368,8 +369,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(async move {
             tokio::select! {
                 biased;
-                _ = tok.cancelled() => {}
-                _ = run_lifecycle_worker(lifecycle_rx, ulp, rp, tr, gs, sb, http_clone, cache_clone, media, als, ltx) => {}
+                () = tok.cancelled() => {}
+                () = run_lifecycle_worker(lifecycle_rx, ulp, rp, tr, gs, sb, http_clone, cache_clone, media, als, ltx) => {}
             }
         });
     }

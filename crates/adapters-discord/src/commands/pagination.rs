@@ -9,11 +9,13 @@ use serenity::model::application::ComponentInteraction;
 use uuid::Uuid;
 
 /// Custom ID format: `"{view_type}:{resource_id}:{page}:{user_id}"`
+#[must_use]
 pub fn make_custom_id(view_type: &str, resource_id: &str, page: i64, user_id: &str) -> String {
     format!("{view_type}:{resource_id}:{page}:{user_id}")
 }
 
 /// Parse a pagination custom_id. Returns (view_type, resource_id, page, user_id).
+#[must_use]
 pub fn parse_custom_id(custom_id: &str) -> Option<(String, String, i64, String)> {
     let parts: Vec<&str> = custom_id.splitn(4, ':').collect();
     if parts.len() != 4 {
@@ -70,6 +72,7 @@ pub fn build_nav_buttons<'a>(
 }
 
 /// Compute total pages from total items and page size.
+#[must_use]
 pub fn total_pages(total_items: i64, page_size: i64) -> i64 {
     if total_items == 0 {
         1
@@ -79,6 +82,7 @@ pub fn total_pages(total_items: i64, page_size: i64) -> i64 {
 }
 
 /// Check if the interacting user owns this pagination session.
+#[must_use]
 pub fn is_session_owner(interaction: &ComponentInteraction, session_user_id: &str) -> bool {
     interaction.user.id.to_string() == session_user_id
 }
@@ -95,6 +99,7 @@ pub async fn send_not_yours(http: &serenity::all::Http, interaction: &ComponentI
 }
 
 /// UUID helper for resource_id parsing
+#[must_use]
 pub fn parse_resource_uuid(resource_id: &str) -> Option<Uuid> {
     Uuid::parse_str(resource_id).ok()
 }

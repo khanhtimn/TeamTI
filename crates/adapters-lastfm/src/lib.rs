@@ -23,6 +23,7 @@ pub struct LastFmAdapter {
 }
 
 impl LastFmAdapter {
+    #[must_use]
     pub fn new(api_key: String) -> Self {
         let limiter = Arc::new(RateLimiter::direct(
             // 4 req/sec — generous for Last.fm but safe

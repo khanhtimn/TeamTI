@@ -19,12 +19,11 @@ pub struct AudioMetadata {
 ///
 /// All text fields are NFC-normalized before return to fix macOS APFS NFD filenames.
 pub fn extract_metadata(path: &Path) -> AudioMetadata {
-    let mut meta = match try_symphonia_metadata(path) {
-        Some(meta) => meta,
-        None => {
-            warn!(file = %path.display(), "Symphonia probe failed, using filename heuristic");
-            filename_heuristic(path)
-        }
+    let mut meta = if let Some(meta) = try_symphonia_metadata(path) {
+        meta
+    } else {
+        warn!(file = %path.display(), "Symphonia probe failed, using filename heuristic");
+        filename_heuristic(path)
     };
 
     // NFC-normalize all text fields to fix macOS APFS NFD decomposed filenames
@@ -77,7 +76,10 @@ fn try_symphonia_metadata(path: &Path) -> Option<AudioMetadata> {
     use symphonia::core::probe::Hint;
 
     let file = std::fs::File::open(path).ok()?;
-    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    let mss = MediaSourceStream::new(
+        Box::new(file),
+        symphonia::core::io::MediaSourceStreamOptions::default(),
+    );
 
     let mut hint = Hint::new();
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
@@ -178,7 +180,7 @@ fn filename_heuristic(path: &Path) -> AudioMetadata {
         }
     } else {
         AudioMetadata {
-            title: stem.to_string(),
+            title: stem.clone(),
             artist: None,
             duration_ms: None,
             original_filename,

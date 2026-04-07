@@ -1,3 +1,4 @@
+const MAX_DECODE_SECS: u64 = 120;
 use std::io::Cursor;
 use std::path::Path;
 
@@ -46,8 +47,8 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
     // parsed as u16 from the correct tag key for each format (TDRC for ID3v2,
     // DATE for Vorbis comments, etc.) — no manual string parsing needed.
     let year: Option<i32> = tag
-        .and_then(|t| t.date())
-        .map(|ts| ts.year as i32)
+        .and_then(lofty::tag::Accessor::date)
+        .map(|ts| i32::from(ts.year))
         .filter(|y| (1900..=2100).contains(y));
 
     let genres: Vec<String> = tag
@@ -60,17 +61,17 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
         .unwrap_or_default();
 
     let mut raw_tags = RawFileTags {
-        title: tag.and_then(|t| t.title().map(|s| s.into_owned())),
-        artist: tag.and_then(|t| t.artist().map(|s| s.into_owned())),
-        album: tag.and_then(|t| t.album().map(|s| s.into_owned())),
+        title: tag.and_then(|t| t.title().map(std::borrow::Cow::into_owned)),
+        artist: tag.and_then(|t| t.artist().map(std::borrow::Cow::into_owned)),
+        album: tag.and_then(|t| t.album().map(std::borrow::Cow::into_owned)),
         year,
         genres: if genres.is_empty() {
             None
         } else {
             Some(genres)
         },
-        track_number: tag.and_then(|t| t.track()),
-        disc_number: tag.and_then(|t| t.disk()),
+        track_number: tag.and_then(lofty::tag::Accessor::track),
+        disc_number: tag.and_then(lofty::tag::Accessor::disk),
         bpm: tag
             .and_then(|t| t.get_string(ItemKey::Bpm))
             .and_then(|s| s.parse::<i32>().ok())
@@ -101,14 +102,17 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
     // --- Symphonia: decode PCM for Chromaprint ---
     // Reuse the same in-memory buffer — no second file open needed.
     let cursor2 = Cursor::new(file_bytes);
-    let mss = symphonia::core::io::MediaSourceStream::new(Box::new(cursor2), Default::default());
+    let mss = symphonia::core::io::MediaSourceStream::new(
+        Box::new(cursor2),
+        symphonia::core::io::MediaSourceStreamOptions::default(),
+    );
 
     let probed = symphonia::default::get_probe()
         .format(
-            &Default::default(),
+            &symphonia::core::probe::Hint::default(),
             mss,
-            &Default::default(),
-            &Default::default(),
+            &symphonia::core::formats::FormatOptions::default(),
+            &symphonia::core::meta::MetadataOptions::default(),
         )
         .map_err(|e| AppError::Fingerprint {
             path: path.to_owned(),
@@ -131,11 +135,11 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
         .codec_params
         .n_frames
         .zip(track.codec_params.time_base)
-        .map(|(frames, tb)| {
-            let secs = frames as f64 * tb.numer as f64 / tb.denom as f64;
-            secs as u32
-        })
-        .unwrap_or(0);
+        .map_or(0.0, |(frames, tb)| {
+            frames as f64 * f64::from(tb.numer) / f64::from(tb.denom)
+        });
+
+    let duration_secs_u32 = duration_secs as u32;
 
     let codec = symphonia::default::get_codecs()
         .get_codec(track.codec_params.codec)
@@ -151,19 +155,21 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
     raw_tags.codec = codec;
 
     let mut decoder = symphonia::default::get_codecs()
-        .make(&track.codec_params, &Default::default())
+        .make(
+            &track.codec_params,
+            &symphonia::core::codecs::DecoderOptions::default(),
+        )
         .map_err(|e| AppError::Fingerprint {
             path: path.to_owned(),
             source: Box::new(e),
         })?;
 
     let cp_sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
-    let cp_channels = track.codec_params.channels.map(|c| c.count()).unwrap_or(2) as u16;
+    let cp_channels = track.codec_params.channels.map_or(2, |c| c.count() as u16);
 
     let mut fp = chromaprint::Fingerprinter::new(chromaprint::Algorithm::default());
     let _ = fp.start(cp_sample_rate, cp_channels);
 
-    const MAX_DECODE_SECS: u64 = 120;
     let mut decoded_secs: f64 = 0.0;
 
     'decode: loop {
@@ -172,12 +178,7 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
         }
         let packet = match format.next_packet() {
             Ok(p) => p,
-            Err(symphonia::core::errors::Error::IoError(_)) => break,
-            Err(symphonia::core::errors::Error::ResetRequired) => {
-                // Treat as soft end-of-stream for fingerprinting purposes.
-                // We have sufficient PCM; do not risk corrupting the fingerprint.
-                break 'decode;
-            }
+            Err(symphonia::core::errors::Error::ResetRequired) => break 'decode,
             Err(_) => break,
         };
 
@@ -185,18 +186,18 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
             continue;
         }
 
-        let decoded = match decoder.decode(&packet) {
-            Ok(d) => d,
-            Err(_) => continue,
+        let Ok(decoded_packet) = decoder.decode(&packet) else {
+            continue;
         };
 
-        let frames = decoded.capacity();
-        decoded_secs += frames as f64 / cp_sample_rate as f64;
+        let frames = decoded_packet.capacity();
+        let add = frames as f64 / f64::from(cp_sample_rate);
+        decoded_secs += add;
 
         // Convert to i16 samples for Chromaprint
-        let spec = *decoded.spec();
+        let spec = *decoded_packet.spec();
         let mut sample_buf = symphonia::core::audio::SampleBuffer::<i16>::new(frames as u64, spec);
-        sample_buf.copy_interleaved_ref(decoded);
+        sample_buf.copy_interleaved_ref(decoded_packet);
         let samples = sample_buf.samples();
 
         let _ = fp.feed(samples);
@@ -207,8 +208,8 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
     // string expected by the AcoustID API (DESIGN-1 fix).
     let fingerprint_str = fp.encode();
 
-    let duration_ms = if duration_secs > 0 {
-        duration_secs * 1000
+    let duration_ms = if duration_secs > 0.0 {
+        (duration_secs * 1000.0) as u32
     } else {
         (decoded_secs * 1000.0) as u32
     };
@@ -218,7 +219,7 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, u32), Ap
     Ok((
         AudioFingerprint {
             fingerprint: fingerprint_str,
-            duration_secs: duration_secs.max((decoded_secs as u32).max(1)),
+            duration_secs: duration_secs_u32.max((decoded_secs as u32).max(1)),
         },
         raw_tags,
         duration_ms,

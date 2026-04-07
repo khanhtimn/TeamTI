@@ -27,7 +27,7 @@ pub use tag_writer_worker::TagWriterWorker;
 
 /// A listen event is "completed" when the user listened to at least
 /// this fraction of the track duration.
-pub const LISTEN_COMPLETION_THRESHOLD: f32 = 0.80;
+pub const LISTEN_COMPLETION_THRESHOLD: f64 = 0.80;
 
 /// Number of tracks remaining in the queue at which radio mode triggers a refill.
 pub const RADIO_REFILL_THRESHOLD: usize = 2;

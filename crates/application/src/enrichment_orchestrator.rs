@@ -6,9 +6,11 @@ use tracing::{info, warn};
 
 use crate::events::{AcoustIdRequest, TrackScanned};
 use crate::ports::repository::TrackRepository;
+use crate::ports::search::TrackSearchPort;
 
 pub struct EnrichmentOrchestrator {
     pub repo: Arc<dyn TrackRepository>,
+    pub search_port: Arc<dyn TrackSearchPort>,
     pub scan_interval_secs: u64,
     pub failed_retry_limit: i32,
     pub unmatched_retry_limit: i32,
@@ -37,6 +39,16 @@ impl EnrichmentOrchestrator {
                         correlation_id = %scanned.correlation_id,
                         "orchestrator: reactive enrich for track"
                     );
+
+                    // Index track immediately so it is searchable even if enrichment fails or is delayed.
+                    if let Err(e) = self.search_port.reindex_track(scanned.track_id).await {
+                        warn!(
+                            track_id = %scanned.track_id,
+                            error = %e,
+                            "orchestrator: failed to reindex incoming track"
+                        );
+                    }
+
                     // CRIT-3 fix: use claim_single to atomically set status='enriching',
                     // preventing duplicate enrichment with the proactive poll path.
                     // If the poll path already claimed it, claim_single returns None.

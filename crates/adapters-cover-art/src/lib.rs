@@ -6,6 +6,16 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
+// C3 fix: use an explicit priority list instead of falling back to
+// PictureType::Other, which includes artist photos, back covers,
+// band logos, and lyric sheets — not just cover art.
+const PREFERRED: &[PictureType] = &[
+    PictureType::CoverFront,
+    PictureType::Media,
+    PictureType::Leaflet,
+    PictureType::Illustration,
+];
+
 use application::AppError;
 use application::error::CoverArtErrorKind;
 use application::ports::CoverArtPort;
@@ -16,6 +26,7 @@ pub struct CoverArtAdapter {
 }
 
 impl CoverArtAdapter {
+    #[must_use]
     pub fn new(concurrency: usize) -> Self {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(20))
@@ -95,13 +106,6 @@ impl CoverArtPort for CoverArtAdapter {
             // C3 fix: use an explicit priority list instead of falling back to
             // PictureType::Other, which includes artist photos, back covers,
             // band logos, and lyric sheets — not just cover art.
-            const PREFERRED: &[PictureType] = &[
-                PictureType::CoverFront,
-                PictureType::Media,
-                PictureType::Leaflet,
-                PictureType::Illustration,
-            ];
-
             let art = tag.and_then(|t| {
                 PREFERRED
                     .iter()
