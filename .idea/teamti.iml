@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="EMPTY_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/apps/bot/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/bot/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/portal/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-acoustid/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-analysis/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-cover-art/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-discord/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-lastfm/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-lyrics/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-media-store/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-media-store/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-musicbrainz/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-persistence/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-search/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-voice/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/adapters-watcher/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/application/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/domain/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/shared-config/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/shared-observability/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/apps/web-portal/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

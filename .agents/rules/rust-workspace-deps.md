@@ -3,81 +3,137 @@ trigger: always_on
 ---
 
 ## Rust Workspace Dependency Management
-	
+
 ### Workspace Structure
-	
-This is a **Cargo workspace project**. All Rust code lives under a workspace defined in the root `Cargo.toml`.
-	
+
+This is a **Cargo workspace project** where crates are split per feature/component. All Rust code lives under a workspace defined in the root `Cargo.toml`.
+
+---
+
 ### Root `Cargo.toml` Rules
-	
-1. All external dependencies MUST be declared in `[workspace.dependencies]` in the root `Cargo.toml`.
-2. Every dependency MUST specify `default-features = false`.
-3. Do NOT specify features at the workspace level — feature selection is the responsibility of each subcrate.
-	
-Example root declaration:
-	
+
+1. **`resolver = "2"` MUST be set** in `[workspace]` to prevent feature unification across workspace members.
+2. All external dependencies MUST be declared in `[workspace.dependencies]`.
+3. Every workspace dependency MUST specify `default-features = false`. Feature selection is the sole responsibility of each subcrate.
+4. Do NOT declare `optional` on workspace-level dependency entries — optionality is a per-crate concern.
+
 ```toml
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/http",
+    "crates/db",
+    "crates/my-lib",   # aggregator façade
+]
+
 [workspace.dependencies]
-serde = { version = "1", default-features = false }
-tokio = { version = "1", default-features = false }
+serde  = { version = "1",   default-features = false }
+tokio  = { version = "1",   default-features = false }
+axum   = { version = "0.8", default-features = false }
+sqlx   = { version = "0.8", default-features = false }
 ```
 
-Subcrate Cargo.toml Rules
+---
 
-1. Subcrates MUST reference dependencies via workspace = true.
+### Subcrate `Cargo.toml` Rules
 
-2. Subcrates MUST declare only the features they actually need.
-
-3. Do NOT specify version or default-features in subcrate dependency entries — those come from the workspace root.
-
-Example subcrate declaration:
+1. Reference all external deps via `workspace = true`.
+2. Declare **only the features that subcrate actually needs**.
+3. Do NOT repeat `version` or `default-features` — those come from the workspace root.
+4. Mark internal path-deps as `optional = true` when they are conditionally needed.
 
 ```toml
+# crates/http/Cargo.toml
 [dependencies]
+tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
+axum  = { workspace = true, features = ["http1", "tokio"] }
 serde = { workspace = true, features = ["derive"] }
-tokio = { workspace = true, features = ["rt", "macros"] }
 ```
 
-Adding New Dependencies
+---
 
-1. Always use cargo add first to resolve the latest version:
+### Aggregator / Façade Crate Rules
 
-# From the workspace root:
-cargo add <crate_name> --dry-run
+When a top-level crate re-exports subcrates as public features:
 
+1. Declare internal subcrate path-deps as `optional = true`.
+2. Gate them behind named `[features]` using the `dep:` prefix to prevent the dep name from leaking as an implicit feature.
+3. Provide a `full` feature that activates all optional crates.
 
-Use the resolved version to manually add the entry to [workspace.dependencies] with default-features = false.
+```toml
+# crates/my-lib/Cargo.toml
+[dependencies]
+core = { path = "../core" }                          # always required
+http = { path = "../http", optional = true }
+db   = { path = "../db",   optional = true }
 
-2. 
-Alternatively, add directly then edit:
+[features]
+http = ["dep:http"]
+db   = ["dep:db"]
+full = ["http", "db"]
+```
 
-cargo add <crate_name>
+> **Why `dep:` prefix?** Without it, declaring `http = { ..., optional = true }` implicitly creates a feature also named `http`, which can be activated unintentionally. `dep:http` cleanly separates the dependency from the feature name.
 
-Then move the entry into [workspace.dependencies], set default-features = false, and update the subcrate to use workspace = true with its required features.
+---
 
-3. Never hardcode or guess versions. Always let cargo add or cargo search resolve the latest.
+### Adding New Dependencies
 
-When APIs Break or Are Unclear
+1. Resolve the latest version from the workspace root — never guess:
 
-1. Before using any dependency's API, consult the docs for the exact version declared in the workspace root:
-- Use https://docs.rs/<crate_name>/<version> or
+```bash
+# Dry-run to read the resolved version
+cargo add <crate_name> -p <subcrate> --dry-run
 
-- Run cargo doc --open -p <crate_name>
+# Or add then promote to workspace
+cargo add <crate_name> -p <subcrate>
+```
 
-- Consult pulled source code
+2. Move the entry into `[workspace.dependencies]` with `default-features = false`, remove `version` from the subcrate entry, and add `workspace = true`.
 
-2. If a compile error suggests an API change, check the crate's changelog/migration guide before modifying code.
+3. In the subcrate, keep only the `features = [...]` it needs.
 
-3. Do NOT assume API signatures from memory — verify against docs of the pinned version.
+---
 
-Checklist Before Committing
+### When APIs Break or Are Unclear
 
--  New dependency exists in root [workspace.dependencies] with default-features = false
+1. Before using any dep's API, verify against the exact pinned version:
+   - `https://docs.rs/<crate_name>/<version>`
+   - `cargo doc --open -p <crate_name>`
 
--  No version or default-features key in any subcrate Cargo.toml for workspace deps
+2. If a compile error suggests an API change, check the crate's changelog before modifying code.
 
--  Subcrate specifies only the features it needs via features = [...]
+3. Do NOT assume API signatures from memory — always verify against the pinned version's docs.
 
--  Version was resolved via cargo add / cargo search, not guessed
+---
 
--  API usage matches docs for the declared version
+### Auditing Feature Unification
+
+Run these after adding or changing deps to verify features are not bleeding across crates:
+
+```bash
+# Full feature tree for a specific crate
+cargo tree -e features -p <crate_name>
+
+# Check which features land on a specific dep
+cargo tree -e features -i tokio
+
+# Detect unintended duplicate compilations
+cargo tree --duplicates
+```
+
+With `resolver = "2"`, the same dep may legitimately compile twice with *different* feature sets (e.g., once for a build-script, once for the lib). Use `--duplicates` to distinguish intentional from unintentional duplication.
+
+---
+
+### Checklist Before Committing
+
+- [ ] `resolver = "2"` is present in `[workspace]`
+- [ ] New external dep is in `[workspace.dependencies]` with `default-features = false`
+- [ ] Subcrate entry uses `workspace = true` with no `version` or `default-features`
+- [ ] Subcrate specifies only the features it needs via `features = [...]`
+- [ ] Optional subcrate deps in the aggregator use `dep:` prefix in `[features]`
+- [ ] Version was resolved via `cargo add` / `cargo search`, not guessed
+- [ ] API usage verified against docs for the pinned version
+- [ ] `cargo tree --duplicates` shows no unexpected duplicate compilations

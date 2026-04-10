@@ -5,9 +5,19 @@ authors = ["TeamTI"]
 
 [workspace]
 members = ["apps/*", "crates/*"]
+default-members = ["apps/bot"]
 resolver = "2"
 
 [workspace.dependencies]
+# Web Portal
+axum = { version = "0.8", default-features = false }
+leptos = { version = "0.8", default-features = false }
+leptos_router = { version = "0.8", default-features = false }
+leptos_axum = { version = "0.8", default-features = false }
+leptos_meta = { version = "0.8", default-features = false }
+console_error_panic_hook = { version = "0.1", default-features = false }
+wasm-bindgen = { version = "0.2.106", default-features = false }
+
 tokio = { version = "1.51", default-features = false }
 governor = { version = "0.10", default-features = false }
 reqwest = { version = "0.13", default-features = false }
@@ -53,23 +63,12 @@ codegen-units = 1
 strip = "symbols"
 panic = "abort"
 
+[profile.wasm-release]
+inherits = "release"
+opt-level = 'z'
+lto = true
+codegen-units = 1
+panic = "abort"
+
 [workspace.lints.clippy]
-pedantic = { level = "warn", priority = -1 }
-missing_errors_doc = "allow"
-missing_panics_doc = "allow"
-missing_docs_in_private_items = "allow"
-doc_markdown = "allow"
-module_name_repetitions = "allow"
-cast_possible_truncation = "allow"
-cast_possible_wrap = "allow"
-cast_precision_loss = "allow"
-cast_sign_loss = "allow"
-too_many_lines = "allow"
-manual_let_else = "allow"
-format_push_string = "allow"
-items_after_statements = "allow"
-match_same_arms = "allow"
-struct_excessive_bools = "allow"
-unused_async = "allow"
-similar_names = "allow"
-unseparated_literal_suffix = "allow"
+pedantic = { level = "warn" }
