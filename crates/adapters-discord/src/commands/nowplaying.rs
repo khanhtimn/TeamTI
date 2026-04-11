@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use serenity::builder::{CreateCommand, EditInteractionResponse};
 use serenity::model::application::CommandInteraction;
@@ -77,12 +78,16 @@ pub async fn run(
         ));
     }
 }
-
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_np_button(
     http: &Arc<serenity::all::Http>,
+    cache: &Arc<serenity::all::Cache>,
     interaction: &serenity::model::application::ComponentInteraction,
     songbird: &Arc<songbird::Songbird>,
     guild_state_map: &Arc<GuildStateMap>,
+    media_root: &std::path::Path,
+    auto_leave_secs: u64,
+    lifecycle_tx: adapters_voice::lifecycle::TrackLifecycleTx,
 ) {
     let Some(action) = crate::ui::custom_id::NPAction::from_custom_id(&interaction.data.custom_id)
     else {
@@ -101,7 +106,7 @@ pub async fn handle_np_button(
             if state.is_paused() {
                 // Resume
                 if let Some(pa) = state.paused_at.take() {
-                    let paused_ms = pa.elapsed().as_millis() as i64;
+                    let paused_ms = i64::try_from(pa.elapsed().as_millis()).unwrap_or_default();
                     state.total_paused_ms += paused_ms;
                 }
                 drop(state);
@@ -130,6 +135,142 @@ pub async fn handle_np_button(
             if let Some(handler_lock) = songbird.get(guild_id) {
                 let handler = handler_lock.lock().await;
                 let _ = handler.queue().skip();
+            }
+
+            let _ = interaction
+                .create_response(
+                    http,
+                    serenity::builder::CreateInteractionResponse::Acknowledge,
+                )
+                .await;
+        }
+        crate::ui::custom_id::NPAction::Prev { .. } => {
+            let state_lock = match guild_state_map.get(&guild_id) {
+                Some(s) => s.clone(),
+                None => return,
+            };
+
+            let play_ms = {
+                let state = state_lock.lock().await;
+                state.actual_play_ms()
+            };
+
+            // Rewind logic (> 5s)
+            if play_ms > 5000 {
+                {
+                    let mut state = state_lock.lock().await;
+                    state.track_started_at = Some(std::time::Instant::now());
+                    state.total_paused_ms = 0;
+                }
+                if let Some(handler_lock) = songbird.get(guild_id)
+                    && let Some(curr) = handler_lock.lock().await.queue().current()
+                {
+                    let _ = curr.seek(Duration::from_secs(0));
+                }
+            } else {
+                // Reverse track logic (<= 5s)
+                let mut state = state_lock.lock().await;
+                if state.history.is_empty() {
+                    // Fallback to rewinding if no history exists even if < 5s
+                    state.track_started_at = Some(std::time::Instant::now());
+                    state.total_paused_ms = 0;
+                    drop(state);
+                    if let Some(handler_lock) = songbird.get(guild_id)
+                        && let Some(curr) = handler_lock.lock().await.queue().current()
+                    {
+                        let _ = curr.seek(Duration::from_secs(0));
+                    }
+                } else {
+                    let mut target = state.history.pop_back().unwrap();
+                    target.songbird_uuid = None;
+
+                    let mut current_clone = state.meta_queue.front().cloned();
+                    if let Some(c) = current_clone.as_mut() {
+                        c.songbird_uuid = None;
+                    }
+
+                    state.suppress_history_push = true; // Signal event handler to not duplicate current to history
+
+                    // Push target to meta_queue so it matches Songbird's queue size before reordering
+                    state.meta_queue.push_back(target.clone());
+                    drop(state);
+
+                    // Re-enqueue target (places at end of Songbird / meta_queue)
+                    let _ = adapters_voice::player::enqueue_track(
+                        songbird,
+                        guild_id,
+                        &target,
+                        media_root,
+                        http,
+                        cache,
+                        auto_leave_secs,
+                        guild_state_map,
+                        lifecycle_tx.clone(),
+                    )
+                    .await;
+
+                    // Re-enqueue current track to retain position (places at end of Songbird / meta_queue)
+                    if let Some(ref curr_clone) = current_clone {
+                        {
+                            let mut state = state_lock.lock().await;
+                            state.meta_queue.push_back(curr_clone.clone());
+                        }
+                        let _ = adapters_voice::player::enqueue_track(
+                            songbird,
+                            guild_id,
+                            curr_clone,
+                            media_root,
+                            http,
+                            cache,
+                            auto_leave_secs,
+                            guild_state_map,
+                            lifecycle_tx.clone(),
+                        )
+                        .await;
+                    }
+
+                    // Extract the latest 2 additions and position them at Index 1 & Index 2
+                    {
+                        let mut state = state_lock.lock().await;
+                        if state.meta_queue.len() > 1 && current_clone.is_some() {
+                            // Enqueued target, then curr_clone. So tail is [..., target, curr_clone]
+                            let curr = state.meta_queue.pop_back().unwrap();
+                            let tgt = state.meta_queue.pop_back().unwrap();
+                            state.meta_queue.insert(1, tgt);
+                            state.meta_queue.insert(2, curr);
+                        } else if state.meta_queue.len() > 1 {
+                            // Only target enqueued
+                            let tgt = state.meta_queue.pop_back().unwrap();
+                            state.meta_queue.insert(1, tgt);
+                        }
+                    }
+
+                    {
+                        let state = state_lock.lock().await;
+                        let uuids_in_order: Vec<_> = state
+                            .meta_queue
+                            .iter()
+                            .filter_map(|t| t.songbird_uuid)
+                            .collect();
+
+                        if let Some(handler_lock) = songbird.get(guild_id) {
+                            let handler = handler_lock.lock().await;
+                            handler.queue().modify_queue(|q| {
+                                let mut map: std::collections::HashMap<_, _> =
+                                    q.drain(..).map(|h| (h.handle().uuid(), h)).collect();
+                                for target_uuid in uuids_in_order {
+                                    if let Some(handle) = map.remove(&target_uuid) {
+                                        q.push_back(handle);
+                                    }
+                                }
+                                for (_, handle) in map {
+                                    q.push_back(handle);
+                                }
+                            });
+                            let _ = handler.queue().skip();
+                        }
+                    }
+                }
             }
 
             let _ = interaction

@@ -97,7 +97,7 @@ impl MusicBrainzPort for MusicBrainzAdapter {
         let body: MbRecordingResponse =
             serde_json::from_str(&body_text).map_err(|e| AppError::MusicBrainz {
                 kind: MusicBrainzErrorKind::InvalidResponse,
-                detail: format!("MusicBrainz JSON parse error: {e} — body: {body_text}",),
+                detail: format!("MusicBrainz JSON parse error: {e} — body: {body_text}"),
             })?;
 
         // B4 fix: select the most relevant release by priority.

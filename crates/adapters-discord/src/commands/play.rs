@@ -204,9 +204,7 @@ pub async fn run(
     let _ = interaction.defer_ephemeral(http).await;
 
     // ── 1. Parse the selected track UUID from the autocomplete value ───────
-    let asset_id_str = if let Some(s) = extract_query(interaction) {
-        s
-    } else {
+    let Some(asset_id_str) = extract_query(interaction) else {
         let _ = interaction
             .edit_response(
                 http,
@@ -245,9 +243,7 @@ pub async fn run(
             .and_then(|vs| vs.channel_id)
     });
 
-    let channel_id = if let Some(ch) = user_voice_channel {
-        ch
-    } else {
+    let Some(channel_id) = user_voice_channel else {
         let _ = interaction
             .edit_response(
                 http,

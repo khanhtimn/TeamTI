@@ -93,7 +93,7 @@ impl AcoustIdPort for AcoustIdAdapter {
         let body: AcoustIdResponse =
             serde_json::from_str(&body_text).map_err(|e| AppError::AcoustId {
                 kind: AcoustIdErrorKind::InvalidResponse,
-                detail: format!("AcoustID JSON parse error: {e} — body: {body_text}",),
+                detail: format!("AcoustID JSON parse error: {e} — body: {body_text}"),
             })?;
 
         if body.status != "ok" {

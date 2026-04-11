@@ -102,7 +102,9 @@ pub async fn rebuild_index(
     pool: &PgPool,
     schema: &MusicSchema,
 ) -> Result<usize, AppError> {
-    writer.delete_all_documents().map_err(write_err)?;
+    writer
+        .delete_all_documents()
+        .map_err(|e: tantivy::TantivyError| write_err(&e))?;
 
     // Use runtime query_as instead of query_as! because the denormalized
     // query with array_agg is hard to express with compile-time checking.
@@ -158,10 +160,12 @@ pub async fn rebuild_index(
     for (i, row) in rows.iter().enumerate() {
         writer
             .add_document(build_document(row, schema))
-            .map_err(write_err)?;
+            .map_err(|e: tantivy::TantivyError| write_err(&e))?;
 
         if (i + 1) % COMMIT_BATCH_SIZE == 0 {
-            writer.commit().map_err(write_err)?;
+            writer
+                .commit()
+                .map_err(|e: tantivy::TantivyError| write_err(&e))?;
             tracing::debug!(
                 indexed = i + 1,
                 total = total,
@@ -172,7 +176,9 @@ pub async fn rebuild_index(
         }
     }
 
-    writer.commit().map_err(write_err)?;
+    writer
+        .commit()
+        .map_err(|e: tantivy::TantivyError| write_err(&e))?;
 
     tracing::info!(
         documents = total,
@@ -247,10 +253,12 @@ pub async fn reindex_track(
     if let Some(row) = row {
         writer
             .add_document(build_document(&row, schema))
-            .map_err(write_err)?;
+            .map_err(|e: tantivy::TantivyError| write_err(&e))?;
     }
 
-    writer.commit().map_err(write_err)?;
+    writer
+        .commit()
+        .map_err(|e: tantivy::TantivyError| write_err(&e))?;
 
     tracing::debug!(
         %track_id,
@@ -261,7 +269,7 @@ pub async fn reindex_track(
     Ok(())
 }
 
-fn write_err(e: tantivy::TantivyError) -> AppError {
+fn write_err(e: &tantivy::TantivyError) -> AppError {
     AppError::Search {
         kind: SearchErrorKind::WriteFailed,
         detail: e.to_string(),

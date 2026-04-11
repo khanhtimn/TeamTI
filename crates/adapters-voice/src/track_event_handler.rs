@@ -59,14 +59,39 @@ impl SongbirdEventHandler for TrackEventHandler {
 
         let mut state = state_lock.lock().await;
 
-        // Pop the just-finished track from our metadata mirror.
+        let target_uuid = if let EventContext::Track(ts) = ctx {
+            ts.first().map(|t| t.1.uuid())
+        } else {
+            None
+        };
+
+        // Pop the just-finished track from our metadata mirror by matching UUID securely.
         // Songbird already popped its own TrackQueue entry via QueueHandler.
-        // WI-2: If pop_front returns None, the queue was already empty —
-        // /clear or /leave already posted "Queue Ended". Don't double-post.
-        let finished_track = state.meta_queue.pop_front()?;
+        let finished_track = if let Some(uuid) = target_uuid {
+            let pos = state
+                .meta_queue
+                .iter()
+                .position(|t| t.songbird_uuid == Some(uuid));
+            match pos {
+                Some(p) => state.meta_queue.remove(p)?,
+                None => return None, // Track removed already or invalid — don't double-post
+            }
+        } else {
+            return None;
+        };
 
         // ── Emit TrackEnded lifecycle event (pause-aware duration) ──────
         let play_duration_ms = state.actual_play_ms();
+
+        // Push to history unless suppressed by a Prev button command
+        if state.suppress_history_push {
+            state.suppress_history_push = false;
+        } else {
+            state.history.push_back(finished_track.clone());
+            if state.history.len() > 50 {
+                state.history.pop_front();
+            }
+        }
 
         let _ = self.lifecycle_tx.send(TrackLifecycleEvent::TrackEnded {
             guild_id: self.guild_id,
@@ -233,16 +258,16 @@ pub async fn np_auto_update_task(
             () = tokio::time::sleep(interval) => {
                 // O1 audit fix: skip the edit when paused — nothing has
                 // changed visually, saves Discord API budget.
-                let (embed, is_paused) = {
+                let (embed, is_paused, history_empty) = {
                     let s = state.lock().await;
                     if s.is_paused() {
                         continue;
                     }
                     let track = s.meta_queue.front();
-                    (build_np_embed(track, &s), s.is_paused())
+                    (build_np_embed(track, &s), s.is_paused(), s.history.is_empty())
                 };
 
-                let action_row = build_np_action_buttons(guild_id, is_paused);
+                let action_row = build_np_action_buttons(guild_id, is_paused, history_empty);
 
                 let edit = serenity::builder::EditMessage::new()
                     .embed(embed)
@@ -260,16 +285,17 @@ pub async fn np_auto_update_task(
 fn build_np_action_buttons(
     guild_id: GuildId,
     is_paused: bool,
+    history_empty: bool,
 ) -> serenity::builder::CreateComponent<'static> {
     use serenity::builder::{CreateActionRow, CreateButton, CreateComponent};
     use serenity::model::application::ButtonStyle;
 
-    let prev = CreateButton::new("np_dummy_prev")
+    let prev = CreateButton::new(format!("np|prev|{guild_id}"))
         .label("⏮ Prev")
         .style(ButtonStyle::Secondary)
-        .disabled(true);
+        .disabled(history_empty);
 
-    let pause_resume = CreateButton::new(format!("np|pause|{}", guild_id))
+    let pause_resume = CreateButton::new(format!("np|pause|{guild_id}"))
         .label(if is_paused { "▶ Resume" } else { "⏸ Pause" })
         .style(if is_paused {
             ButtonStyle::Success
@@ -277,7 +303,7 @@ fn build_np_action_buttons(
             ButtonStyle::Secondary
         });
 
-    let skip = CreateButton::new(format!("np|skip|{}", guild_id))
+    let skip = CreateButton::new(format!("np|skip|{guild_id}"))
         .label("⏭ Next")
         .style(ButtonStyle::Secondary);
 
@@ -411,15 +437,23 @@ pub async fn post_now_playing(
 ) {
     use serenity::builder::{CreateMessage, EditMessage};
 
-    let (embed, is_paused) = {
+    let (embed, is_paused, history_empty) = {
         let state = state_lock.lock().await;
-        (build_np_embed(track, &state), state.is_paused())
+        (
+            build_np_embed(track, &state),
+            state.is_paused(),
+            state.history.is_empty(),
+        )
     };
 
     if let Some(msg_id) = existing_msg_id {
         let edit = EditMessage::new().embed(embed);
         let edit = if track.is_some() {
-            edit.components(vec![build_np_action_buttons(guild_id, is_paused)])
+            edit.components(vec![build_np_action_buttons(
+                guild_id,
+                is_paused,
+                history_empty,
+            )])
         } else {
             edit.components(vec![])
         };
@@ -436,7 +470,11 @@ pub async fn post_now_playing(
     } else {
         let msg = CreateMessage::new().embed(embed);
         let msg = if track.is_some() {
-            msg.components(vec![build_np_action_buttons(guild_id, is_paused)])
+            msg.components(vec![build_np_action_buttons(
+                guild_id,
+                is_paused,
+                history_empty,
+            )])
         } else {
             msg
         };
@@ -468,14 +506,22 @@ pub async fn post_now_playing_new(
 ) -> Option<MessageId> {
     use serenity::builder::CreateMessage;
 
-    let (embed, is_paused) = {
+    let (embed, is_paused, history_empty) = {
         let state = state_lock.lock().await;
-        (build_np_embed(track, &state), state.is_paused())
+        (
+            build_np_embed(track, &state),
+            state.is_paused(),
+            state.history.is_empty(),
+        )
     };
 
     let msg = CreateMessage::new().embed(embed);
     let msg = if track.is_some() {
-        msg.components(vec![build_np_action_buttons(guild_id, is_paused)])
+        msg.components(vec![build_np_action_buttons(
+            guild_id,
+            is_paused,
+            history_empty,
+        )])
     } else {
         msg
     };

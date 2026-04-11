@@ -29,7 +29,7 @@ impl Drop for ScanGuard {
 
 impl MediaWatcher {
     pub fn start(
-        config: Arc<AppConfig>,
+        config: &Arc<AppConfig>,
     ) -> Result<(Self, mpsc::Receiver<FileEvent>), application::error::AppError> {
         let (tx, rx) = mpsc::channel::<FileEvent>(2048);
         let scan_in_progress = Arc::new(AtomicBool::new(false));

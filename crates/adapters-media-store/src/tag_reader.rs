@@ -143,9 +143,12 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, i64), Ap
         .get_codec(track.codec_params.codec)
         .map(|d| d.long_name.to_string());
 
-    let bitrate = track.codec_params.bits_per_sample.map(|b| b as i32); // FLAC
-    let sample_rate = track.codec_params.sample_rate.map(|s| s as i32);
-    let channels = track.codec_params.channels.map(|c| c.count() as i32);
+    let bitrate = track.codec_params.bits_per_sample.map(u32::cast_signed); // FLAC
+    let sample_rate = track.codec_params.sample_rate.map(u32::cast_signed);
+    let channels = track
+        .codec_params
+        .channels
+        .map(|c| i32::try_from(c.count()).unwrap_or_default());
 
     raw_tags.bitrate = bitrate;
     raw_tags.sample_rate = sample_rate;
@@ -163,7 +166,10 @@ pub fn read_file(path: &Path) -> Result<(AudioFingerprint, RawFileTags, i64), Ap
         })?;
 
     let cp_sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
-    let cp_channels = track.codec_params.channels.map_or(2, |c| c.count() as u16);
+    let cp_channels = track
+        .codec_params
+        .channels
+        .map_or(2, |c| u16::try_from(c.count()).unwrap_or_default());
 
     let mut fp = chromaprint::Fingerprinter::new(chromaprint::Algorithm::default());
     let _ = fp.start(cp_sample_rate, cp_channels);

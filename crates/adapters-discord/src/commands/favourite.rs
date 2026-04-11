@@ -57,9 +57,8 @@ pub async fn run(
     guild_state: &Arc<GuildStateMap>,
 ) {
     let options = interaction.data.options();
-    let subcmd = match options.first() {
-        Some(opt) => opt,
-        None => return,
+    let Some(subcmd) = options.first() else {
+        return;
     };
 
     let user_id = interaction.user.id.to_string();
@@ -98,16 +97,12 @@ pub async fn autocomplete(
     search_port: &Arc<dyn application::ports::search::TrackSearchPort>,
 ) {
     // Track autocomplete for add/remove: get the focused value from raw options
-    let subcmd = match interaction.data.options.first() {
-        Some(opt) => opt,
-        None => return,
+    let Some(subcmd) = interaction.data.options.first() else {
+        return;
     };
 
-    use serenity::model::application::CommandDataOptionValue;
-
-    let sub_options = match &subcmd.value {
-        CommandDataOptionValue::SubCommand(opts) => opts,
-        _ => return,
+    let serenity::all::CommandDataOptionValue::SubCommand(sub_options) = &subcmd.value else {
+        return;
     };
 
     // Find the focused autocomplete option
@@ -342,9 +337,8 @@ fn extract_uuid_option(
     subcmd: &serenity::model::application::ResolvedOption<'_>,
     name: &str,
 ) -> Option<Uuid> {
-    let opts = match &subcmd.value {
-        ResolvedValue::SubCommand(opts) => opts,
-        _ => return None,
+    let ResolvedValue::SubCommand(opts) = &subcmd.value else {
+        return None;
     };
     opts.iter()
         .find(|o| o.name == name)

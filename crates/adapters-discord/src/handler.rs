@@ -70,8 +70,7 @@ impl EventHandler for DiscordEventHandler {
                 }
 
                 // Register commands specifically to the configured guild for instant propagation
-                use serenity::all::GuildId;
-                let guild_id = GuildId::new(self.discord_guild_id);
+                let guild_id = serenity::all::GuildId::new(self.discord_guild_id);
                 let result = guild_id.set_commands(&ctx.http, &cmds).await;
 
                 match result {
@@ -349,9 +348,13 @@ impl DiscordEventHandler {
         if crate::ui::custom_id::NPAction::is_np_action(custom_id) {
             crate::commands::nowplaying::handle_np_button(
                 &ctx.http,
+                &ctx.cache,
                 interaction,
                 &self.songbird,
                 &self.guild_state,
+                &self.media_root,
+                self.auto_leave_secs,
+                self.lifecycle_tx.clone(),
             )
             .await;
             return;
@@ -454,8 +457,10 @@ impl DiscordEventHandler {
                     Ok(all_tracks) => {
                         let total = all_tracks.len() as i64;
                         let pages = pagination::total_pages(total, pagination::PAGE_SIZE);
-                        let start = (page * pagination::PAGE_SIZE) as usize;
-                        let end = ((page + 1) * pagination::PAGE_SIZE) as usize;
+                        let start =
+                            usize::try_from(page * pagination::PAGE_SIZE).unwrap_or_default();
+                        let end =
+                            usize::try_from((page + 1) * pagination::PAGE_SIZE).unwrap_or_default();
                         let page_tracks: Vec<_> = all_tracks
                             .into_iter()
                             .skip(start)

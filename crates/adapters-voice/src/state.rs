@@ -32,6 +32,8 @@ pub struct QueuedTrack {
     pub added_by: String,
     /// Whether this was manually queued or added by radio.
     pub source: QueueSource,
+    /// Native linkage token mapped to Songbird's internal track handle.
+    pub songbird_uuid: Option<uuid::Uuid>,
 }
 
 impl From<&Track> for QueuedTrack {
@@ -45,6 +47,7 @@ impl From<&Track> for QueuedTrack {
             blob_location: t.blob_location.clone(),
             added_by: String::new(),
             source: QueueSource::Manual,
+            songbird_uuid: None,
         }
     }
 }
@@ -60,6 +63,7 @@ impl From<TrackSummary> for QueuedTrack {
             blob_location: s.blob_location.unwrap_or_default(),
             added_by: String::new(),
             source: QueueSource::Manual,
+            songbird_uuid: None,
         }
     }
 }
@@ -93,13 +97,11 @@ pub struct GuildMusicState {
     // Auto-leave: cancelled when a new track is queued
     pub auto_leave_token: Option<CancellationToken>,
 
-    // ── Pass 3: Radio mode ────────────────────────────────────────
     /// Whether radio mode is active for this guild.
     pub radio_mode: bool,
     /// The user who started radio mode (for recommendation seeding).
     pub radio_user_id: Option<String>,
 
-    // ── Pass 5: Pause duration tracking ───────────────────────────
     /// When the current (front) track started playing.
     /// Reset to `Some(Instant::now())` on TrackStarted.
     pub track_started_at: Option<Instant>,
@@ -111,7 +113,6 @@ pub struct GuildMusicState {
     /// `i64` to match the universal ms type convention.
     pub total_paused_ms: i64,
 
-    // ── Pass 5: NP auto-update ────────────────────────────────────
     /// Cancellation token for the NP auto-update background task.
     /// Cancelled when a new track starts or the bot leaves.
     ///
@@ -120,6 +121,14 @@ pub struct GuildMusicState {
     /// decision B3. The bot posts a new NP message on the first
     /// `TrackStarted` event after restart.
     pub np_update_cancel: Option<CancellationToken>,
+
+    // ── History tracking ───────────────────────────────────────────
+    /// History of tracks that have already played (popped from front of queue).
+    pub history: VecDeque<QueuedTrack>,
+
+    /// Internal flag to instruct `TrackEventHandler` NOT to push the next finished track
+    /// to history. Used to prevent duplicating history when rewriting queues for `Prev` button.
+    pub suppress_history_push: bool,
 }
 
 impl Default for GuildMusicState {
@@ -143,6 +152,8 @@ impl GuildMusicState {
             paused_at: None,
             total_paused_ms: 0,
             np_update_cancel: None,
+            history: VecDeque::new(),
+            suppress_history_push: false,
         }
     }
 
@@ -193,9 +204,9 @@ impl GuildMusicState {
     /// Returns `i64` — the universal ms type.
     #[must_use]
     pub fn actual_play_ms(&self) -> i64 {
-        let elapsed = self
-            .track_started_at
-            .map_or(0, |s| s.elapsed().as_millis() as i64);
+        let elapsed = self.track_started_at.map_or(0, |s| {
+            i64::try_from(s.elapsed().as_millis()).unwrap_or_default()
+        });
         (elapsed - self.total_paused_ms).max(0)
     }
 

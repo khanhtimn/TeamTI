@@ -20,15 +20,15 @@ impl MediaScanner {
     /// - `mpsc::Receiver<TrackScanned>` — connect to EnrichmentOrchestrator
     /// - `Arc<Semaphore>` — SMB_READ_SEMAPHORE, store in AppState for Pass 4
     pub fn start(
-        config: Arc<Config>,
-        track_repo: Arc<dyn TrackRepository>,
+        config: &Arc<Config>,
+        track_repo: &Arc<dyn TrackRepository>,
         token: CancellationToken,
     ) -> (mpsc::Receiver<TrackScanned>, Arc<Semaphore>) {
         let smb_semaphore = Arc::new(Semaphore::new(config.smb_read_concurrency));
         let fp_concurrency = Arc::new(Semaphore::new(config.fingerprint_concurrency));
 
         let (watcher, watcher_rx) =
-            MediaWatcher::start(Arc::clone(&config)).expect("MediaWatcher failed to start");
+            MediaWatcher::start(&Arc::clone(config)).expect("MediaWatcher failed to start");
 
         // Create a merged channel: initial scan + ongoing watcher events
         let (merged_tx, file_rx) = mpsc::channel::<FileEvent>(2048);
@@ -57,15 +57,15 @@ impl MediaScanner {
 
         // Classifier task
         spawn_with_cancel(token.clone(), {
-            let config = Arc::clone(&config);
-            let repo = Arc::clone(&track_repo);
+            let config = Arc::clone(config);
+            let repo = Arc::clone(track_repo);
             async move { run_classifier(config, repo, file_rx, fp_tx).await }
         });
 
         // Fingerprint Worker task
         spawn_with_cancel(token.clone(), {
-            let config = Arc::clone(&config);
-            let repo = Arc::clone(&track_repo);
+            let config = Arc::clone(config);
+            let repo = Arc::clone(track_repo);
             let smb = Arc::clone(&smb_semaphore);
             let fpc = Arc::clone(&fp_concurrency);
             async move { run_fingerprint_worker(config, repo, smb, fpc, fp_rx, scan_tx).await }

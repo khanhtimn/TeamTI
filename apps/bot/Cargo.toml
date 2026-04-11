@@ -21,10 +21,27 @@ shared-config = { path = "../../crates/shared-config" }
 dashmap = { workspace = true, features = ["inline"] }
 
 tokio = { workspace = true, features = ["full"] }
-serenity = { workspace = true, features = ["gateway", "rustls_backend", "model", "cache", "voice"] }
-songbird = { workspace = true, features = ["driver", "rustls", "serenity", "builtin-queue", "tungstenite", "gateway"] }
+serenity = { workspace = true, features = [
+    "gateway",
+    "rustls_backend",
+    "model",
+    "cache",
+    "voice",
+] }
+songbird = { workspace = true, features = [
+    "driver",
+    "rustls",
+    "serenity",
+    "builtin-queue",
+    "tungstenite",
+    "gateway",
+] }
 tracing = { workspace = true, features = ["default"] }
 dotenvy.workspace = true
 rustls = { workspace = true, features = ["ring", "std"] }
 tokio-util = { workspace = true, features = ["rt"] }
-tracing-subscriber = { workspace = true, features = ["env-filter", "fmt", "registry", "json"] }
+tracing-subscriber = { workspace = true, features = [
+    "default",
+    "env-filter",
+    "json",
+] }

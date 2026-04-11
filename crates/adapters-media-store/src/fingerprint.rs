@@ -77,7 +77,7 @@ pub async fn run_fingerprint_worker(
                                     .update_file_identity(
                                         existing.id,
                                         mtime,
-                                        i64::try_from(msg.size_bytes).unwrap_or(0),
+                                        i64::try_from(msg.size_bytes).unwrap_or_default(),
                                         &rel,
                                     )
                                     .await;
@@ -88,7 +88,7 @@ pub async fn run_fingerprint_worker(
                                     .update_file_identity(
                                         existing.id,
                                         mtime,
-                                        i64::try_from(msg.size_bytes).unwrap_or(0),
+                                        i64::try_from(msg.size_bytes).unwrap_or_default(),
                                         &rel,
                                     )
                                     .await;
@@ -114,10 +114,10 @@ pub async fn run_fingerprint_worker(
                                 album_id: None,
                                 track_number: raw_tags
                                     .track_number
-                                    .map(|n| i32::try_from(n).unwrap_or(0)),
+                                    .map(|n| i32::try_from(n).unwrap_or_default()),
                                 disc_number: raw_tags
                                     .disc_number
-                                    .map(|n| i32::try_from(n).unwrap_or(0)),
+                                    .map(|n| i32::try_from(n).unwrap_or_default()),
                                 duration_ms: Some(duration_ms),
                                 genres: raw_tags.genres,
                                 year: raw_tags.year,
@@ -130,7 +130,9 @@ pub async fn run_fingerprint_worker(
                                 codec: raw_tags.codec,
                                 audio_fingerprint: Some(fp.fingerprint.clone()),
                                 file_modified_at: Some(mtime),
-                                file_size_bytes: Some(i64::try_from(msg.size_bytes).unwrap_or(0)),
+                                file_size_bytes: Some(
+                                    i64::try_from(msg.size_bytes).unwrap_or_default(),
+                                ),
                                 blob_location: rel.clone(),
                                 mbid: None,
                                 acoustid_id: None,

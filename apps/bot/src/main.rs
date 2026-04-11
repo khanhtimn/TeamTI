@@ -108,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let search_port: Arc<dyn TrackSearchPort> = Arc::new(
-        TantivySearchAdapter::open_or_create(config.tantivy_index_path.clone(), db.0.clone())
+        TantivySearchAdapter::open_or_create(&config.tantivy_index_path, db.0.clone())
             .expect("failed to open Tantivy search index"),
     );
 
@@ -128,8 +128,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = CancellationToken::new();
 
     let (scan_rx, smb_semaphore) = MediaScanner::start(
-        Arc::clone(&config),
-        Arc::clone(&track_repo) as Arc<dyn TrackRepository>,
+        &Arc::clone(&config),
+        &(Arc::clone(&track_repo) as Arc<dyn TrackRepository>),
         token.clone(),
     );
 

@@ -193,9 +193,8 @@ pub async fn run(
     playlist_port: &Arc<dyn PlaylistPort>,
 ) {
     let options = interaction.data.options();
-    let subcmd = match options.first() {
-        Some(opt) => opt,
-        None => return,
+    let Some(subcmd) = options.first() else {
+        return;
     };
 
     let user_id = interaction.user.id.to_string();
@@ -227,25 +226,22 @@ pub async fn autocomplete(
     use serenity::model::application::CommandDataOptionValue;
 
     let user_id = interaction.user.id.to_string();
-    let subcmd = match interaction.data.options.first() {
-        Some(opt) => opt,
-        None => return,
+    let Some(subcmd) = interaction.data.options.first() else {
+        return;
     };
 
     let subcmd_name = subcmd.name.as_str();
 
-    let sub_options = match &subcmd.value {
-        CommandDataOptionValue::SubCommand(opts) => opts,
-        _ => return,
+    let CommandDataOptionValue::SubCommand(sub_options) = &subcmd.value else {
+        return;
     };
 
     // Find the focused option by looking for Autocomplete variant
     let focused = sub_options
         .iter()
         .find(|o| matches!(&o.value, CommandDataOptionValue::Autocomplete { .. }));
-    let focused_opt = match focused {
-        Some(o) => o,
-        None => return,
+    let Some(focused_opt) = focused else {
+        return;
     };
 
     let focused_value = focused_opt.value.as_str().unwrap_or("");
@@ -455,9 +451,8 @@ async fn run_create(
     subcmd: &serenity::model::application::ResolvedOption<'_>,
 ) {
     let _ = interaction.defer_ephemeral(http).await;
-    let opts = match &subcmd.value {
-        ResolvedValue::SubCommand(opts) => opts,
-        _ => return,
+    let ResolvedValue::SubCommand(opts) = &subcmd.value else {
+        return;
     };
 
     let name = opts

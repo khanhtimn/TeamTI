@@ -59,7 +59,7 @@ pub async fn run(
 
     // Accumulate paused time
     if let Some(pa) = state.paused_at.take() {
-        let paused_ms = pa.elapsed().as_millis() as i64;
+        let paused_ms = i64::try_from(pa.elapsed().as_millis()).unwrap_or_default();
         state.total_paused_ms += paused_ms;
     }
     drop(state);

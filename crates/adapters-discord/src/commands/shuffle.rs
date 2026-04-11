@@ -64,23 +64,30 @@ pub async fn run(
     }
     drop(state);
 
-    // Apply the same permutation to Songbird's queue
+    // Apply the same permutation to Songbird's queue safely using explicit mapping
     if let Some(handler_lock) = songbird.get(guild_id) {
         let handler = handler_lock.lock().await;
+
+        let state = state_lock.lock().await;
+        let uuids_in_order: Vec<_> = state
+            .meta_queue
+            .iter()
+            .filter_map(|t| t.songbird_uuid)
+            .collect();
+        drop(state);
+
         handler.queue().modify_queue(|q| {
             if q.len() > 1 {
-                let mut sb_tail: Vec<_> = q.drain(1..).collect();
-                if sb_tail.len() == original_len {
-                    let mut sb_opts: Vec<_> = sb_tail.drain(..).map(Some).collect();
-                    for &old_pos in &indices {
-                        if let Some(item) = sb_opts[old_pos].take() {
-                            q.push_back(item);
-                        }
+                let mut map: std::collections::HashMap<uuid::Uuid, songbird::tracks::Queued> =
+                    q.drain(..).map(|h| (h.handle().uuid(), h)).collect();
+                for target_uuid in uuids_in_order {
+                    if let Some(handle) = map.remove(&target_uuid) {
+                        q.push_back(handle);
                     }
-                } else {
-                    for item in sb_tail {
-                        q.push_back(item);
-                    }
+                }
+                // Push any unmapped stragglers to the end natively ensuring no abandoned frames block resources
+                for (_, handle) in map {
+                    q.push_back(handle);
                 }
             }
         });

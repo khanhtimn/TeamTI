@@ -141,7 +141,7 @@ impl MusicBrainzWorker {
                         track_id: msg.track_id,
                         artist_id: upserted.id,
                         role,
-                        position: (i + 1) as i32,
+                        position: i32::try_from(i + 1).unwrap_or_default(),
                     })
                     .await;
 
@@ -246,7 +246,7 @@ impl MusicBrainzWorker {
                         } else {
                             ArtistRole::Featuring
                         },
-                        position: (i + 1) as i32,
+                        position: i32::try_from(i + 1).unwrap_or_default(),
                     })
                     .await;
             }

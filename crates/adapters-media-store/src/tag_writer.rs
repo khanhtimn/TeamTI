@@ -219,7 +219,7 @@ pub fn write_tags_atomic(path: &Path, tags: &TagData) -> Result<WriteResult, App
             source: e,
         })?
         .into();
-    let new_size_bytes = meta.len() as i64;
+    let new_size_bytes = meta.len().cast_signed();
 
     // A2 fix: disarm AFTER rename succeeds — if rename had failed,
     // the guard would have dropped and removed the temp file.

@@ -44,7 +44,7 @@ pub async fn run(
         .iter()
         .find(|opt| opt.name == "to")
         .and_then(|opt| opt.value.as_i64())
-        .map(|n| n as usize);
+        .map(|n| usize::try_from(n).unwrap_or_default());
 
     let (Some(from), Some(to)) = (from_pos, to_pos) else {
         let _ = interaction
@@ -97,16 +97,23 @@ pub async fn run(
 
     let track = state.meta_queue.remove(from).unwrap();
     let title = track.title.clone();
+    let target_uuid = track.songbird_uuid;
+    // We get the UUID of the track that will immediately precede our target in the new layout
+    let prev_uuid = state.meta_queue[to - 1].songbird_uuid;
+
     state.meta_queue.insert(to, track);
     drop(state);
 
-    // Reorder Songbird's queue
-    if let Some(handler_lock) = songbird.get(guild_id) {
+    // Reorder Songbird's queue securely mapping the shifted elements via UUID
+    if let (Some(uuid), Some(handler_lock)) = (target_uuid, songbird.get(guild_id)) {
         let handler = handler_lock.lock().await;
         handler.queue().modify_queue(|q| {
-            if from < q.len() {
-                let item = q.remove(from).unwrap();
-                let insert_pos = to.min(q.len());
+            if let Some(current_pos) = q.iter().position(|t| t.handle().uuid() == uuid) {
+                let item = q.remove(current_pos).unwrap();
+                let insert_pos = prev_uuid
+                    .and_then(|p_id| q.iter().position(|t| t.handle().uuid() == p_id))
+                    .map_or(q.len(), |p| p + 1);
+                let insert_pos = insert_pos.min(q.len());
                 q.insert(insert_pos, item);
             }
         });

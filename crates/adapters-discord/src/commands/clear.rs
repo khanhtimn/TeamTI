@@ -48,18 +48,28 @@ pub async fn run(
     // Keep position 0 (currently playing), clear positions 1..end
     let cleared_count = state.meta_queue.len() - 1;
 
-    // Drain meta_queue ourselves — don't rely on Songbird event handlers
-    // which fire asynchronously and could pop the wrong entries.
     state.meta_queue.truncate(1);
+
+    // Maintain precisely the explicit subset of tracked items inside our state snapshot securely tracking only mapped handles natively
+    let retained_uuids: Vec<_> = state
+        .meta_queue
+        .iter()
+        .filter_map(|t| t.songbird_uuid)
+        .collect();
     drop(state);
 
-    // Remove from Songbird's queue (positions 1..end).
-    // These are Queued (not Playing) entries — dropping them does NOT
-    // fire TrackEvent::End, but we drain meta_queue first to be safe.
     if let Some(handler_lock) = songbird.get(guild_id) {
         let handler = handler_lock.lock().await;
         handler.queue().modify_queue(|q| {
-            q.drain(1..);
+            let mut retained = Vec::new();
+            for handle in q.drain(..) {
+                if retained_uuids.contains(&handle.handle().uuid()) {
+                    retained.push(handle);
+                }
+            }
+            for handle in retained {
+                q.push_back(handle);
+            }
         });
     }
 

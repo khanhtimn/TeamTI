@@ -105,6 +105,15 @@ pub async fn enqueue_track(
     let mut users_in_channel = Vec::new();
     if let Some(state_entry) = state_map.get(&guild_id) {
         let mut state = state_entry.lock().await;
+
+        // Immediately map the native handle UUID back to the meta_queue track securely
+        for queued in state.meta_queue.iter_mut().rev() {
+            if queued.track_id == track.track_id && queued.songbird_uuid.is_none() {
+                queued.songbird_uuid = Some(handle.uuid());
+                break;
+            }
+        }
+
         // Only set if this is the first/only track (i.e. it starts playing immediately)
         if state.meta_queue.len() <= 1 {
             state.track_started_at = Some(Instant::now());

@@ -109,6 +109,7 @@ impl QueueAction {
 pub enum NPAction {
     Pause { guild_id: GuildId },
     Skip { guild_id: GuildId },
+    Prev { guild_id: GuildId },
 }
 
 impl NPAction {
@@ -117,6 +118,7 @@ impl NPAction {
         match self {
             Self::Pause { guild_id } => format!("np|pause|{guild_id}"),
             Self::Skip { guild_id } => format!("np|skip|{guild_id}"),
+            Self::Prev { guild_id } => format!("np|prev|{guild_id}"),
         }
     }
 
@@ -128,6 +130,9 @@ impl NPAction {
                 guild_id: GuildId::new(g.parse().ok()?),
             }),
             ["np", "skip", g] => Some(Self::Skip {
+                guild_id: GuildId::new(g.parse().ok()?),
+            }),
+            ["np", "prev", g] => Some(Self::Prev {
                 guild_id: GuildId::new(g.parse().ok()?),
             }),
             _ => None,

@@ -106,7 +106,7 @@ pub async fn run_classifier(
                     .duration_since(mtime)
                     .or_else(|_| mtime.duration_since(db_mt))
                     .is_ok_and(|d| d.as_secs() < 2)
-                    && track.file_size_bytes == Some(i64::try_from(size_bytes).unwrap_or(0));
+                    && track.file_size_bytes == Some(i64::try_from(size_bytes).unwrap_or_default());
 
                 if unchanged {
                     debug!("classifier: skip unchanged {rel}");

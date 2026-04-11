@@ -26,7 +26,10 @@ pub async fn run(
         Ok(tracks) => {
             let total = tracks.len() as i64;
             let pages = total_pages(total, PAGE_SIZE);
-            let page_tracks: Vec<_> = tracks.into_iter().take(PAGE_SIZE as usize).collect();
+            let page_tracks: Vec<_> = tracks
+                .into_iter()
+                .take(usize::try_from(PAGE_SIZE).unwrap_or_default())
+                .collect();
 
             let embed = build_history_embed(&page_tracks, 0, pages, total);
             let buttons = build_nav_buttons("history_page", &user_id, 0, pages, &user_id);

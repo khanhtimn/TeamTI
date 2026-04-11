@@ -34,7 +34,7 @@ impl TantivySearchAdapter {
     /// Open an existing index or create a new empty one.
     /// Call `rebuild_all().await` immediately after if the index is new
     /// or if a full reindex is required (startup, /rescan).
-    pub fn open_or_create(path: PathBuf, pool: PgPool) -> Result<Self, AppError> {
+    pub fn open_or_create(path: &PathBuf, pool: PgPool) -> Result<Self, AppError> {
         let schema = MusicSchema::build();
 
         let open_err = |e: tantivy::TantivyError| AppError::Search {
@@ -47,7 +47,7 @@ impl TantivySearchAdapter {
         };
 
         let index = {
-            let dir_result = MmapDirectory::open(&path);
+            let dir_result = MmapDirectory::open(path);
 
             if let Ok(dir) = dir_result {
                 if let Ok(idx) = Index::open(dir) {
@@ -64,7 +64,7 @@ impl TantivySearchAdapter {
                         operation = "search.index_created",
                         "no valid index found, creating new"
                     );
-                    let dir = MmapDirectory::open(&path).map_err(|e| AppError::Search {
+                    let dir = MmapDirectory::open(path).map_err(|e| AppError::Search {
                         kind: SearchErrorKind::OpenFailed,
                         detail: e.to_string(),
                     })?;
@@ -77,8 +77,8 @@ impl TantivySearchAdapter {
                 }
             } else {
                 // Directory doesn't exist yet — create it and the index.
-                std::fs::create_dir_all(&path).map_err(io_err)?;
-                let dir = MmapDirectory::open(&path).map_err(|e| AppError::Search {
+                std::fs::create_dir_all(path).map_err(io_err)?;
+                let dir = MmapDirectory::open(path).map_err(|e| AppError::Search {
                     kind: SearchErrorKind::OpenFailed,
                     detail: e.to_string(),
                 })?;
