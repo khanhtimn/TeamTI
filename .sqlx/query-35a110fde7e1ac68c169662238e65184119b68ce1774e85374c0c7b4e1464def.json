@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH input_data AS (\n                SELECT * FROM unnest(\n                    $1::uuid[],\n                    $2::text[],\n                    $3::text[],\n                    $4::bigint[],\n                    $5::text[],\n                    $6::text[],\n                    $7::text[],\n                    $8::text[]\n                ) AS t(id, title, artist_display, duration_ms, video_id, channel_id, uploader, thumbnail)\n            ),\n            inserted AS (\n                INSERT INTO tracks (\n                    id, title, artist_display, duration_ms,\n                    source, youtube_video_id, youtube_channel_id,\n                    youtube_uploader, youtube_thumbnail_url,\n                    enrichment_status, created_at, updated_at\n                )\n                SELECT\n                    id, title, artist_display, duration_ms,\n                    'youtube', video_id, channel_id,\n                    uploader, thumbnail,\n                    'pending', now(), now()\n                FROM input_data\n                ON CONFLICT (youtube_video_id) WHERE youtube_video_id IS NOT NULL\n                DO NOTHING\n                RETURNING youtube_video_id, id\n            )\n            SELECT i.youtube_video_id as video_id, i.id\n            FROM inserted i\n            UNION ALL\n            SELECT t.youtube_video_id as video_id, t.id\n            FROM tracks t\n            JOIN input_data inp ON t.youtube_video_id = inp.video_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "video_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "Int8Array",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "35a110fde7e1ac68c169662238e65184119b68ce1774e85374c0c7b4e1464def"
+}

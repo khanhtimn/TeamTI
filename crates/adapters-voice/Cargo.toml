@@ -8,7 +8,6 @@ authors.workspace = true
 application = { path = "../application" }
 adapters-persistence = { path = "../adapters-persistence" }
 domain = { path = "../domain" }
-shared-config = { path = "../shared-config" }
 
 songbird = { workspace = true, features = [
     "driver",
@@ -33,3 +32,7 @@ uuid = { workspace = true, features = ["v4", "serde", "fast-rng"] }
 dashmap = { workspace = true, features = ["inline", "serde"] }
 async-trait = { workspace = true }
 thiserror = { workspace = true, features = ["default"] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
+] }
+symphonia-core = { workspace = true }

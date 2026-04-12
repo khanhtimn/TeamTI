@@ -9,6 +9,7 @@ pub mod lyrics_worker;
 pub mod musicbrainz_worker;
 pub mod ports;
 pub mod tag_writer_worker;
+pub mod youtube_worker;
 
 // Keep v1 services module for adapter compatibility during transition
 pub mod dto;
@@ -18,12 +19,16 @@ pub use acoustid_worker::AcoustIdWorker;
 pub use analysis_worker::AnalysisWorker;
 pub use cover_art_worker::CoverArtWorker;
 pub use enrichment_orchestrator::EnrichmentOrchestrator;
-pub use error::{AnalysisErrorKind, AppError, LastFmErrorKind, PlaylistErrorKind, SearchErrorKind};
+pub use error::{
+    AnalysisErrorKind, AppError, LastFmErrorKind, PlaylistErrorKind, SearchErrorKind,
+    YouTubeErrorKind,
+};
 pub use events::{AcoustIdRequest, ToLastFm, ToLyrics, TrackScanned};
 pub use lastfm_worker::LastFmWorker;
 pub use lyrics_worker::LyricsWorker;
 pub use musicbrainz_worker::MusicBrainzWorker;
 pub use tag_writer_worker::TagWriterWorker;
+pub use youtube_worker::YoutubeDownloadWorker;
 
 /// A listen event is "completed" when the user listened to at least
 /// this fraction of the track duration.

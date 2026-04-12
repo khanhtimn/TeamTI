@@ -461,7 +461,7 @@ impl PlaylistPort for PgPlaylistRepository {
                     album_title: r.album_title,
                     album_id: r.album_id,
                     duration_ms: r.duration_ms,
-                    blob_location: Some(r.blob_location),
+                    blob_location: r.blob_location,
                 };
                 (item, summary)
             })
@@ -682,7 +682,7 @@ struct PlaylistItemWithTrack {
     album_title: Option<String>,
     album_id: Option<Uuid>,
     duration_ms: Option<i64>,
-    blob_location: String,
+    blob_location: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -693,7 +693,7 @@ struct TrackSummaryRow {
     album_title: Option<String>,
     album_id: Option<Uuid>,
     duration_ms: Option<i64>,
-    blob_location: String,
+    blob_location: Option<String>,
 }
 
 impl From<TrackSummaryRow> for TrackSummary {
@@ -705,7 +705,7 @@ impl From<TrackSummaryRow> for TrackSummary {
             album_title: r.album_title,
             album_id: r.album_id,
             duration_ms: r.duration_ms,
-            blob_location: Some(r.blob_location),
+            blob_location: r.blob_location,
         }
     }
 }

@@ -31,8 +31,16 @@ pub struct Track {
     pub audio_fingerprint: Option<String>,
     pub file_modified_at: Option<DateTime<Utc>>,
     pub file_size_bytes: Option<i64>,
-    /// Always relative to MEDIA_ROOT
-    pub blob_location: String,
+    /// Relative to MEDIA_ROOT. `None` for YouTube stubs not yet downloaded.
+    pub blob_location: Option<String>,
+
+    // ── YouTube / source tracking ─────────────────────────────────────
+    /// Track source: "local" or "youtube". Default "local".
+    pub source: String,
+    pub youtube_video_id: Option<String>,
+    pub youtube_channel_id: Option<String>,
+    pub youtube_uploader: Option<String>,
+    pub youtube_thumbnail_url: Option<String>,
 
     // Enrichment pipeline state
     pub mbid: Option<String>,

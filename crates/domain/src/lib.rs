@@ -4,6 +4,7 @@ pub mod artist;
 pub mod enrichment;
 pub mod track;
 pub mod user_library;
+pub mod youtube;
 
 // Re-exported v1 types kept for adapter compatibility during transition
 pub mod error;
@@ -20,3 +21,4 @@ pub use user_library::{
     Favorite, FavouritesPage, ListenEvent, Playlist, PlaylistItem, PlaylistPage, PlaylistSummary,
     PlaylistVisibility,
 };
+pub use youtube::{NewYoutubeDownloadJob, VideoMetadata, YoutubeDownloadJob};

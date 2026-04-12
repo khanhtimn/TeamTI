@@ -76,7 +76,10 @@ impl AnalysisWorker {
             let repo = Arc::clone(&self.repo);
             let media_root = self.media_root.clone();
             let track_id = track.id;
-            let blob_location = track.blob_location.clone();
+            let Some(blob_location) = track.blob_location.clone() else {
+                tracing::warn!(track_id = %track_id, "analysis: skipping track with no blob_location");
+                continue;
+            };
 
             join_set.spawn(async move {
                 analyse_one(port, repo, media_root, track_id, &blob_location).await

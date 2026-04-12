@@ -1,9 +1,11 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
 use serenity::model::id::{ChannelId, GuildId};
 use songbird::input::File as SongbirdFile;
+use songbird::input::YoutubeDl;
+use songbird::input::{AudioStream, AudioStreamError, Compose};
 use songbird::tracks::TrackHandle;
 use songbird::{Event, TrackEvent};
 
@@ -68,6 +70,69 @@ pub async fn leave_channel(
 /// Enqueue a track into Songbird's builtin queue.
 /// Attaches a `TrackEventHandler` for metadata sync, "Now Playing" messages,
 /// and auto-leave on idle.
+///
+/// Supports two input modes:
+/// - **Local/cached**: `blob_location` is `Some` → play from local file via `SongbirdFile`
+/// - **YouTube streaming**: `blob_location` is `None` → stream via `YoutubeDl`
+use async_trait::async_trait;
+
+struct LazyHybridInput {
+    media_root: PathBuf,
+    expected_blob_path: Option<String>,
+    /// Video ID for fallback file discovery when expected blob path is stale (F3 fix).
+    video_id: String,
+    ytdlp_binary: String,
+    client: reqwest::Client,
+    page_url: String,
+}
+
+#[async_trait]
+impl Compose for LazyHybridInput {
+    fn create(
+        &mut self,
+    ) -> Result<AudioStream<Box<dyn symphonia_core::io::MediaSource>>, AudioStreamError> {
+        unimplemented!()
+    }
+
+    async fn create_async(
+        &mut self,
+    ) -> Result<AudioStream<Box<dyn symphonia_core::io::MediaSource>>, AudioStreamError> {
+        // If we have an expected blob path, check if it exists on disk now!
+        if let Some(ref expected_blob) = self.expected_blob_path {
+            let abs_path = self.media_root.join(expected_blob);
+            if abs_path.exists() {
+                tracing::info!(path = %abs_path.display(), "Mid-queue reroute: using local file instead of Youtube stream");
+                let mut source = SongbirdFile::new(abs_path);
+                return source.create_async().await;
+            }
+        }
+
+        // F3 fix: If expected blob path was stale (flat-playlist repair changed it),
+        // scan the youtube directory for any file ending in _{video_id}.m4a
+        if !self.video_id.is_empty() {
+            let youtube_dir = self.media_root.join("youtube");
+            if let Some(found) = find_file_by_video_id(&youtube_dir, &self.video_id) {
+                tracing::info!(path = %found.display(), video_id = %self.video_id, "F3 recovery: found file via video_id scan");
+                let mut source = SongbirdFile::new(found);
+                return source.create_async().await;
+            }
+        }
+
+        // Fall back to live streaming
+        tracing::info!(url = %self.page_url, "Using YouTube stream (file not yet downloaded)");
+        let mut ytdl = YoutubeDl::new_ytdl_like(
+            &self.ytdlp_binary,
+            self.client.clone(),
+            self.page_url.clone(),
+        );
+        ytdl.create_async().await
+    }
+
+    fn should_create_async(&self) -> bool {
+        true
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn enqueue_track(
     songbird: &Arc<songbird::Songbird>,
@@ -79,25 +144,53 @@ pub async fn enqueue_track(
     auto_leave_secs: u64,
     state_map: &Arc<GuildStateMap>,
     lifecycle_tx: TrackLifecycleTx,
+    ytdlp_binary: &str,
 ) -> Result<TrackHandle, AppError> {
     let handler_lock = songbird.get(guild_id).ok_or_else(|| AppError::Voice {
         kind: VoiceErrorKind::NotInChannel,
         detail: "not in a voice channel".to_string(),
     })?;
 
-    let abs_path = media_root.join(&track.blob_location);
-    if !abs_path.exists() {
-        return Err(AppError::Voice {
-            kind: VoiceErrorKind::FileNotFound,
-            detail: abs_path.display().to_string(),
-        });
-    }
+    // ── Build the Songbird Input based on whether we have a local file ────
+    let handle = if let Some(ref blob_loc) = track.blob_location {
+        // Cached / local file path
+        let abs_path = media_root.join(blob_loc);
+        if !abs_path.exists() {
+            return Err(AppError::Voice {
+                kind: VoiceErrorKind::FileNotFound,
+                detail: abs_path.display().to_string(),
+            });
+        }
 
-    let source = SongbirdFile::new(abs_path);
-
-    let handle = {
+        let source = SongbirdFile::new(abs_path);
         let mut handler = handler_lock.lock().await;
         handler.enqueue_input(source.into()).await
+    } else if let Some(video_id) = track.youtube_video_id.as_deref() {
+        let page_url = format!("https://www.youtube.com/watch?v={video_id}");
+
+        let client = reqwest::Client::new();
+
+        let mut handler = handler_lock.lock().await;
+        // O4 Fix: Use LazyHybridInput to check if the file finishes downloading mid-queue
+        let lazy_source = LazyHybridInput {
+            media_root: media_root.to_path_buf(),
+            expected_blob_path: track.youtube_blob_path.clone(),
+            video_id: video_id.to_string(),
+            ytdlp_binary: ytdlp_binary.to_string(),
+            client,
+            page_url,
+        };
+        handler
+            .enqueue_input(songbird::input::Input::Lazy(Box::new(lazy_source)))
+            .await
+    } else {
+        return Err(AppError::Voice {
+            kind: VoiceErrorKind::FileNotFound,
+            detail: format!(
+                "track {} has no blob_location and no stream_url",
+                track.track_id
+            ),
+        });
     };
 
     // Record track start time in guild state and emit TrackStarted for the first track
@@ -163,13 +256,41 @@ pub async fn enqueue_track(
         .add_event(Event::Track(TrackEvent::Error), event_handler)
         .ok();
 
+    let path_display = track.blob_location.as_deref().unwrap_or("[youtube-stream]");
     tracing::info!(
         guild_id   = %guild_id,
         track_id   = %track.track_id,
-        path       = %track.blob_location,
+        path       = %path_display,
         operation  = "voice.enqueue",
         "enqueued track to Songbird builtin queue"
     );
 
     Ok(handle)
+}
+
+/// F3 recovery: scan `youtube/` subdirectories for a file whose name
+/// ends with `_{video_id}.m4a`. This handles the case where the download
+/// worker repaired a flat-playlist stub and the blob_path changed after
+/// the track was already queued.
+fn find_file_by_video_id(youtube_dir: &Path, video_id: &str) -> Option<PathBuf> {
+    let suffix = format!("_{video_id}.m4a");
+    let entries = std::fs::read_dir(youtube_dir).ok()?;
+    for uploader_entry in entries.flatten() {
+        let uploader_path = uploader_entry.path();
+        if !uploader_path.is_dir() {
+            continue;
+        }
+        let files = std::fs::read_dir(&uploader_path).ok()?;
+        for file_entry in files.flatten() {
+            let file_path = file_entry.path();
+            if file_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.ends_with(&suffix))
+            {
+                return Some(file_path);
+            }
+        }
+    }
+    None
 }

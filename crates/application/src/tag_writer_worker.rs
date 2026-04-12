@@ -143,10 +143,13 @@ pub async fn run_startup_tag_poller(
         }
         info!(count = batch.len(), "tag_poller: draining startup backlog");
         for track in batch {
+            let Some(blob_loc) = track.blob_location else {
+                continue; // YouTube stubs — no file to write tags to
+            };
             let _ = tag_writer_tx
                 .send(ToTagWriter {
                     track_id: track.id,
-                    blob_location: track.blob_location,
+                    blob_location: blob_loc,
                     correlation_id: uuid::Uuid::new_v4(),
                 })
                 .await;
@@ -167,10 +170,13 @@ pub async fn run_startup_tag_poller(
                     debug!(count = count, "tag_poller: found tracks pending writeback");
                 }
                 for track in tracks {
+                    let Some(blob_loc) = track.blob_location else {
+                        continue;
+                    };
                     let _ = tag_writer_tx
                         .send(ToTagWriter {
                             track_id: track.id,
-                            blob_location: track.blob_location,
+                            blob_location: blob_loc,
                             correlation_id: uuid::Uuid::new_v4(),
                         })
                         .await;

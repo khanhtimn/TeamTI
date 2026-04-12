@@ -45,7 +45,10 @@ impl EnqueueTrack {
             .ok_or_else(|| DomainError::NotFound(format!("No track with id {asset_id}")))?;
 
         let blob_ref = ManagedBlobRef {
-            relative_path: track.blob_location.clone(),
+            relative_path: track
+                .blob_location
+                .clone()
+                .ok_or_else(|| DomainError::NotFound("track has no local file".to_string()))?,
         };
         let source = self.media_store.resolve_playable(&blob_ref).await?;
 

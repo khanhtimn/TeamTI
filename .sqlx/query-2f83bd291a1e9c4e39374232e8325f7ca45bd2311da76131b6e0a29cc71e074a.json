@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE youtube_download_jobs\n            SET status = 'failed',\n                attempts = attempts + 1,\n                error_message = $2\n            WHERE video_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2f83bd291a1e9c4e39374232e8325f7ca45bd2311da76131b6e0a29cc71e074a"
+}

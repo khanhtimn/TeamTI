@@ -88,6 +88,7 @@ pub async fn handle_np_button(
     media_root: &std::path::Path,
     auto_leave_secs: u64,
     lifecycle_tx: adapters_voice::lifecycle::TrackLifecycleTx,
+    ytdlp_binary: &str,
 ) {
     let Some(action) = crate::ui::custom_id::NPAction::from_custom_id(&interaction.data.custom_id)
     else {
@@ -206,6 +207,7 @@ pub async fn handle_np_button(
                         auto_leave_secs,
                         guild_state_map,
                         lifecycle_tx.clone(),
+                        ytdlp_binary,
                     )
                     .await;
 
@@ -225,6 +227,7 @@ pub async fn handle_np_button(
                             auto_leave_secs,
                             guild_state_map,
                             lifecycle_tx.clone(),
+                            ytdlp_binary,
                         )
                         .await;
                     }

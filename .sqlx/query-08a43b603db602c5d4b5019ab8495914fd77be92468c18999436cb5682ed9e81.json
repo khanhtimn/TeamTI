@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE tracks\n            SET analysis_status = 'processing', analysis_locked = true, updated_at = now()\n            WHERE id IN (\n                SELECT id FROM tracks\n                WHERE analysis_locked = false\n                  AND analysis_status IN ('pending', 'failed')\n                  AND analysis_attempts < 3\n                ORDER BY created_at ASC\n                LIMIT $1\n                FOR UPDATE SKIP LOCKED\n            )\n            RETURNING\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,\n                analysis_status as \"analysis_status: domain::AnalysisStatus\",\n                analysis_attempts, analysis_locked, analyzed_at",
+  "query": "\n            SELECT \n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,\n                enrichment_status as \"enrichment_status: _\", \n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,\n                analysis_status as \"analysis_status: _\", \n                analysis_attempts, analysis_locked, analyzed_at\n            FROM tracks t\n            JOIN UNNEST($1::text[]) AS u(loc) ON t.blob_location = u.loc\n            ",
   "describe": {
     "columns": [
       {
@@ -115,68 +115,93 @@
       },
       {
         "ordinal": 22,
-        "name": "enrichment_status: EnrichmentStatus",
+        "name": "source",
         "type_info": "Text"
       },
       {
         "ordinal": 23,
+        "name": "youtube_video_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "youtube_channel_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 25,
+        "name": "youtube_uploader",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 26,
+        "name": "youtube_thumbnail_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 27,
+        "name": "enrichment_status: _",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 28,
         "name": "enrichment_confidence",
         "type_info": "Float4"
       },
       {
-        "ordinal": 24,
+        "ordinal": 29,
         "name": "enrichment_attempts",
         "type_info": "Int4"
       },
       {
-        "ordinal": 25,
+        "ordinal": 30,
         "name": "enrichment_locked",
         "type_info": "Bool"
       },
       {
-        "ordinal": 26,
+        "ordinal": 31,
         "name": "enriched_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 27,
+        "ordinal": 32,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 28,
+        "ordinal": 33,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 29,
+        "ordinal": 34,
         "name": "tags_written_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 30,
-        "name": "analysis_status: domain::AnalysisStatus",
+        "ordinal": 35,
+        "name": "analysis_status: _",
         "type_info": "Text"
       },
       {
-        "ordinal": 31,
+        "ordinal": 36,
         "name": "analysis_attempts",
         "type_info": "Int4"
       },
       {
-        "ordinal": 32,
+        "ordinal": 37,
         "name": "analysis_locked",
         "type_info": "Bool"
       },
       {
-        "ordinal": 33,
+        "ordinal": 38,
         "name": "analyzed_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "TextArray"
       ]
     },
     "nullable": [
@@ -199,7 +224,12 @@
       true,
       true,
       true,
+      true,
+      true,
+      true,
       false,
+      true,
+      true,
       true,
       true,
       false,
@@ -216,5 +246,5 @@
       true
     ]
   },
-  "hash": "a4b6fce8f6f61f589364bd8eb29fae348a03b6ef031efc35961eca0237754d06"
+  "hash": "08a43b603db602c5d4b5019ab8495914fd77be92468c18999436cb5682ed9e81"
 }

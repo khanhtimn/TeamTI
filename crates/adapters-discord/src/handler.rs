@@ -8,10 +8,13 @@ use serenity::prelude::{Context, EventHandler};
 
 use adapters_persistence::repositories::track_repository::PgTrackRepository;
 use adapters_voice::lifecycle::TrackLifecycleTx;
+use application::YoutubeDownloadWorker;
 use application::ports::playlist::PlaylistPort;
 use application::ports::recommendation::RecommendationPort;
 use application::ports::search::TrackSearchPort;
 use application::ports::user_library::UserLibraryPort;
+use application::ports::youtube::YoutubeRepository;
+use application::ports::ytdlp::YtDlpPort;
 
 #[derive(Clone)]
 pub struct DiscordEventHandler {
@@ -21,7 +24,11 @@ pub struct DiscordEventHandler {
     pub playlist_port: Arc<dyn PlaylistPort>,
     pub user_library_port: Arc<dyn UserLibraryPort>,
     pub recommendation_port: Arc<dyn RecommendationPort>,
+    pub youtube_repo: Arc<dyn YoutubeRepository>,
+    pub ytdlp_port: Arc<dyn YtDlpPort>,
+    pub youtube_worker: Arc<YoutubeDownloadWorker>,
     pub media_root: PathBuf,
+    pub ytdlp_binary: String,
     pub auto_leave_secs: u64,
     pub songbird: Arc<songbird::Songbird>,
     pub guild_state: Arc<adapters_voice::state_map::GuildStateMap>,
@@ -113,6 +120,10 @@ impl EventHandler for DiscordEventHandler {
                                     &self.guild_state,
                                     &self.lifecycle_tx,
                                     &self.search_port,
+                                    &self.youtube_repo,
+                                    &self.ytdlp_port,
+                                    &self.youtube_worker,
+                                    &self.ytdlp_binary,
                                 )
                                 .await;
                             }
@@ -151,6 +162,7 @@ impl EventHandler for DiscordEventHandler {
                                         &self.songbird,
                                         &self.guild_state,
                                         &self.lifecycle_tx,
+                                        &self.ytdlp_binary,
                                     )
                                     .await;
                                 } else {
@@ -355,6 +367,7 @@ impl DiscordEventHandler {
                 &self.media_root,
                 self.auto_leave_secs,
                 self.lifecycle_tx.clone(),
+                &self.ytdlp_binary,
             )
             .await;
             return;

@@ -14,6 +14,8 @@ pub enum QueueSource {
     Manual,
     /// Added silently by the radio refill engine.
     Radio,
+    /// Added from YouTube (stream or cached).
+    YouTube,
 }
 
 /// Lightweight metadata for a queued track.
@@ -27,17 +29,28 @@ pub struct QueuedTrack {
     pub album: Option<String>,
     /// Duration from DB — `Option<i64>` mirrors `tracks.duration_ms BIGINT`.
     pub duration_ms: Option<i64>,
-    pub blob_location: String,
+    /// Relative blob path. `None` for uncached YouTube tracks.
+    pub blob_location: Option<String>,
     /// Discord user ID (snowflake as String) of whoever added this track.
     pub added_by: String,
     /// Whether this was manually queued or added by radio.
     pub source: QueueSource,
     /// Native linkage token mapped to Songbird's internal track handle.
     pub songbird_uuid: Option<uuid::Uuid>,
+    // ── YouTube-specific fields ────────────────────────────────────────
+    /// YouTube video ID (for lookahead and dedup).
+    pub youtube_video_id: Option<String>,
+    /// Pre-computed blob path for where the download will land.
+    pub youtube_blob_path: Option<String>,
 }
 
 impl From<&Track> for QueuedTrack {
     fn from(t: &Track) -> Self {
+        let source = if t.source == "youtube" {
+            QueueSource::YouTube
+        } else {
+            QueueSource::Manual
+        };
         Self {
             track_id: t.id,
             title: t.title.clone(),
@@ -46,8 +59,10 @@ impl From<&Track> for QueuedTrack {
             duration_ms: t.duration_ms,
             blob_location: t.blob_location.clone(),
             added_by: String::new(),
-            source: QueueSource::Manual,
+            source,
             songbird_uuid: None,
+            youtube_video_id: t.youtube_video_id.clone(),
+            youtube_blob_path: None,
         }
     }
 }
@@ -60,10 +75,12 @@ impl From<TrackSummary> for QueuedTrack {
             artist: s.artist_display.unwrap_or_default(),
             album: s.album_title,
             duration_ms: s.duration_ms,
-            blob_location: s.blob_location.unwrap_or_default(),
+            blob_location: s.blob_location,
             added_by: String::new(),
             source: QueueSource::Manual,
             songbird_uuid: None,
+            youtube_video_id: None,
+            youtube_blob_path: None,
         }
     }
 }

@@ -231,6 +231,13 @@ pub enum AppError {
         detail: String,
     },
 
+    // ── YouTube ───────────────────────────────────────────────────────────
+    #[error("YouTube error ({kind}): {detail}")]
+    YouTube {
+        kind: YouTubeErrorKind,
+        detail: String,
+    },
+
     // ── Startup / Config ─────────────────────────────────────────────────
     #[error("configuration error — {field}: {message}")]
     Config {
@@ -370,6 +377,18 @@ pub enum SearchErrorKind {
     MalformedDocument,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum YouTubeErrorKind {
+    #[error("subprocess failed")]
+    SubprocessFailed,
+    #[error("metadata parse error")]
+    MetadataParse,
+    #[error("download failed")]
+    DownloadFailed,
+    #[error("video unavailable")]
+    VideoUnavailable,
+}
+
 impl AppError {
     /// Returns a stable, machine-readable string identifying the error kind.
     /// Used as the `error.kind` structured log field.
@@ -449,6 +468,12 @@ impl AppError {
             },
             AppError::Config { .. } => "config",
             AppError::WatcherInit { .. } => "watcher_init",
+            AppError::YouTube { kind, .. } => match kind {
+                YouTubeErrorKind::SubprocessFailed => "youtube.subprocess_failed",
+                YouTubeErrorKind::MetadataParse => "youtube.metadata_parse",
+                YouTubeErrorKind::DownloadFailed => "youtube.download_failed",
+                YouTubeErrorKind::VideoUnavailable => "youtube.video_unavailable",
+            },
         }
     }
 }
@@ -502,6 +527,12 @@ impl Retryable for AppError {
             AppError::LastFm { kind, .. } => matches!(
                 kind,
                 LastFmErrorKind::RateLimited | LastFmErrorKind::ApiError
+            ),
+
+            // YouTube — retryable on subprocess/download failures
+            AppError::YouTube { kind, .. } => matches!(
+                kind,
+                YouTubeErrorKind::SubprocessFailed | YouTubeErrorKind::DownloadFailed
             ),
 
             // Domain and pipeline errors — not retryable

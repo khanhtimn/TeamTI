@@ -17,6 +17,7 @@ use application::RADIO_BATCH_SIZE;
 use application::ports::recommendation::RecommendationPort;
 use application::ports::repository::TrackRepository;
 use application::ports::user_library::UserLibraryPort;
+use application::youtube_worker::YoutubeDownloadWorker;
 use domain::analysis::MoodWeight;
 use tokio_util::sync::CancellationToken;
 
@@ -26,6 +27,7 @@ pub async fn run_lifecycle_worker(
     user_library_port: Arc<dyn UserLibraryPort>,
     recommendation_port: Arc<dyn RecommendationPort>,
     track_repo: Arc<dyn TrackRepository>,
+    youtube_worker: Arc<YoutubeDownloadWorker>,
     guild_state: Arc<GuildStateMap>,
     songbird: Arc<songbird::Songbird>,
     http: Arc<serenity::all::Http>,
@@ -33,7 +35,13 @@ pub async fn run_lifecycle_worker(
     media_root: std::path::PathBuf,
     auto_leave_secs: u64,
     lifecycle_tx: TrackLifecycleTx,
+    ytdlp_binary: String,
 ) {
+    let lookahead_depth = std::env::var("YTDLP_LOOKAHEAD_DEPTH")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(2);
+
     while let Some(event) = rx.recv().await {
         match event {
             TrackLifecycleEvent::TrackStarted {
@@ -91,6 +99,33 @@ pub async fn run_lifecycle_worker(
                             tokio::spawn(np_auto_update_task(
                                 np_cancel, http_clone, channel_id, guild_id, msg_id, sl,
                             ));
+                        }
+                    }
+
+                    // ── YouTube Lookahead Download Trigger ─────────────────
+                    let queued_tracks: Vec<_> = {
+                        state_lock
+                            .lock()
+                            .await
+                            .meta_queue
+                            .iter()
+                            .take(lookahead_depth)
+                            .cloned()
+                            .collect()
+                    };
+
+                    for q in queued_tracks {
+                        if matches!(q.source, QueueSource::YouTube)
+                            && q.blob_location.is_none()
+                            && let (Some(video_id), Some(blob_path)) =
+                                (q.youtube_video_id, q.youtube_blob_path)
+                        {
+                            tracing::info!(
+                                guild_id = %guild_id,
+                                video_id = %video_id,
+                                "Triggering lookahead background download"
+                            );
+                            youtube_worker.schedule(video_id, blob_path);
                         }
                     }
                 }
@@ -227,6 +262,7 @@ pub async fn run_lifecycle_worker(
                                 auto_leave_secs,
                                 &guild_state,
                                 lifecycle_tx.clone(),
+                                &ytdlp_binary,
                             )
                             .await
                             {

@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use serenity::all::Http;
@@ -210,9 +211,6 @@ pub async fn run(
         "share" => run_share(http, interaction, playlist_port, &user_id, subcmd).await,
         "invite" => run_invite(http, interaction, playlist_port, &user_id, subcmd).await,
         "kick" => run_kick(http, interaction, playlist_port, &user_id, subcmd).await,
-        "play" => {
-            // Handled exclusively in handler.rs to accommodate voice connections.
-        }
         _ => {}
     }
 }
@@ -718,13 +716,14 @@ async fn run_list(
                 } else {
                     " 🔒"
                 };
-                description.push_str(&format!(
-                    "**{}**{} — {} track{}\n",
+                let _ = writeln!(
+                    description,
+                    "**{}**{} — {} track{}",
                     p.name,
                     visibility,
                     p.track_count,
                     if p.track_count == 1 { "" } else { "s" }
-                ));
+                );
             }
 
             let title = if is_self {
@@ -957,9 +956,8 @@ fn extract_uuid_option(
     subcmd: &serenity::model::application::ResolvedOption<'_>,
     name: &str,
 ) -> Option<uuid::Uuid> {
-    let opts = match &subcmd.value {
-        ResolvedValue::SubCommand(opts) => opts,
-        _ => return None,
+    let ResolvedValue::SubCommand(opts) = &subcmd.value else {
+        return None;
     };
     opts.iter()
         .find(|o| o.name == name)
@@ -1020,10 +1018,11 @@ pub fn build_playlist_embed<'a>(
                     format!("{}:{:02}", s / 60, s % 60)
                 })
                 .unwrap_or_default();
-            description.push_str(&format!(
-                "`{idx}.` **{}** — {artist} `{dur}`\n",
+            let _ = writeln!(
+                description,
+                "`{idx}.` **{}** — {artist} `{dur}`",
                 track.title
-            ));
+            );
         }
     }
 
@@ -1071,6 +1070,7 @@ pub async fn run_play(
     songbird: &Arc<songbird::Songbird>,
     guild_state_map: &Arc<GuildStateMap>,
     lifecycle_tx: &TrackLifecycleTx,
+    ytdlp_binary: &str,
 ) {
     let _ = interaction.defer(http).await;
 
@@ -1211,6 +1211,7 @@ pub async fn run_play(
             auto_leave_secs,
             guild_state_map,
             lifecycle_tx.clone(),
+            ytdlp_binary,
         )
         .await
         {

@@ -33,9 +33,23 @@ FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libopus0 libssl3 \
+    python3 python3-venv pipx \
+    nodejs \
+    wget xz-utils \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
+
+# Install yt-dlp and inject yt-dlp-ejs natively isolated
+ENV PATH="/root/.local/bin:${PATH}"
+RUN pipx install yt-dlp && pipx inject yt-dlp yt-dlp-ejs
+
+# Download the highly recommended youtube-patched FFmpeg binaries and bind to path
+RUN mkdir -p /tmp/ffmpeg && \
+    wget -qO /tmp/ffmpeg.tar.xz https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz && \
+    tar -xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg && \
+    mv /tmp/ffmpeg/*/bin/ffmpeg /tmp/ffmpeg/*/bin/ffprobe /usr/local/bin/ && \
+    rm -rf /tmp/ffmpeg /tmp/ffmpeg.tar.xz
 
 WORKDIR /app
 

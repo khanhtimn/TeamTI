@@ -331,6 +331,8 @@ pub fn build_np_embed<'a>(
                 "⏸  PAUSED"
             } else if state.radio_mode {
                 "📻  NOW PLAYING (Radio)"
+            } else if t.source == QueueSource::YouTube {
+                "📺  NOW PLAYING (YouTube)"
             } else {
                 "▶  NOW PLAYING"
             };

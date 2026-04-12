@@ -67,7 +67,8 @@ pub async fn run_fingerprint_worker(
                         }
 
                         Ok(Some(existing)) => {
-                            let same_location = existing.blob_location == rel;
+                            let same_location =
+                                existing.blob_location.as_deref() == Some(rel.as_str());
                             let same_id = msg.existing_id == Some(existing.id);
 
                             if same_location || same_id {
@@ -83,7 +84,11 @@ pub async fn run_fingerprint_worker(
                                     .await;
                             } else {
                                 // Same audio, different path — file was moved/renamed.
-                                info!("fingerprint: moved {} → {}", existing.blob_location, rel);
+                                info!(
+                                    "fingerprint: moved {} → {}",
+                                    existing.blob_location.as_deref().unwrap_or("?"),
+                                    rel
+                                );
                                 let _ = repo
                                     .update_file_identity(
                                         existing.id,
@@ -106,6 +111,17 @@ pub async fn run_fingerprint_worker(
                                     stem
                                 }
                             });
+
+                            let (youtube_video_id, source) = if rel.starts_with("youtube/") {
+                                let file_stem = std::path::Path::new(&rel)
+                                    .file_stem()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or("");
+                                let vid = file_stem.rsplit('_').next().map(|s| s.to_string());
+                                (vid, "youtube".to_string())
+                            } else {
+                                (None, "local".to_string())
+                            };
 
                             let track = Track {
                                 id: Uuid::new_v4(),
@@ -133,7 +149,12 @@ pub async fn run_fingerprint_worker(
                                 file_size_bytes: Some(
                                     i64::try_from(msg.size_bytes).unwrap_or_default(),
                                 ),
-                                blob_location: rel.clone(),
+                                blob_location: Some(rel.clone()),
+                                source,
+                                youtube_video_id,
+                                youtube_channel_id: None,
+                                youtube_uploader: None,
+                                youtube_thumbnail_url: None,
                                 mbid: None,
                                 acoustid_id: None,
                                 enrichment_status: EnrichmentStatus::Pending,
@@ -155,23 +176,28 @@ pub async fn run_fingerprint_worker(
                                     if is_inserted {
                                         info!(
                                             "fingerprint: indexed {} ({})",
-                                            inserted.id, inserted.blob_location
+                                            inserted.id,
+                                            inserted.blob_location.as_deref().unwrap_or("?")
                                         );
-                                        let _ = tx
-                                            .send(TrackScanned {
-                                                track_id: inserted.id,
-                                                fingerprint: fp.fingerprint,
-                                                duration_ms: fp.duration_ms,
-                                                blob_location: rel.clone(),
-                                                correlation_id: msg.correlation_id,
-                                            })
-                                            .await;
                                     } else {
                                         info!(
-                                            "fingerprint: audio duplicate resolved for {} ({})",
-                                            inserted.id, inserted.blob_location
+                                            "fingerprint: audio duplicate merged for {} ({})",
+                                            inserted.id,
+                                            inserted.blob_location.as_deref().unwrap_or("?")
                                         );
                                     }
+
+                                    // Always trigger reactive enrichment scans whether newly inserted or merged over
+                                    // a pre-existing youtube stub payload
+                                    let _ = tx
+                                        .send(TrackScanned {
+                                            track_id: inserted.id,
+                                            fingerprint: fp.fingerprint,
+                                            duration_ms: fp.duration_ms,
+                                            blob_location: rel.clone(),
+                                            correlation_id: msg.correlation_id,
+                                        })
+                                        .await;
                                 }
                                 Err(e) => {
                                     warn!("fingerprint: insert failed: {e}");

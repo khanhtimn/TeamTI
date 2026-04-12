@@ -30,13 +30,17 @@ pub fn write_tags_atomic(path: &Path, tags: &TagData) -> Result<WriteResult, App
         })?
         .to_string_lossy();
 
-    // Temp file: hidden dot-prefix + UUID prefix → invisible to scanner,
-    // but the final extension is preserved so `lofty` can infer the format properly.
-    let temp_path = dir.join(format!(".tmp.{}.{}", uuid::Uuid::new_v4(), filename));
+    // Temp file: hidden dot-prefix string identical to library specification resolving isolation securely
+    let temp_file = tempfile::Builder::new()
+        .prefix(".tmp.")
+        .suffix(filename.as_ref())
+        .tempfile_in(dir)
+        .map_err(|_| AppError::TagWrite {
+            path: path.to_owned(),
+            kind: TagWriteErrorKind::CopyFailed,
+        })?;
 
-    // A2 fix: Guard must be a NAMED binding (not `let _ = ...`).
-    // The guard must live until after rename succeeds or fails.
-    let mut temp_guard = TempGuard::new(&temp_path);
+    let temp_path = temp_file.path().to_path_buf();
 
     // Step 1: Copy original → temp (preserves all audio data)
     std::fs::copy(path, &temp_path).map_err(|_| AppError::TagWrite {
@@ -184,17 +188,14 @@ pub fn write_tags_atomic(path: &Path, tags: &TagData) -> Result<WriteResult, App
     }
 
     // Step 3: Atomic rename temp → original.
-    // On the same filesystem (same SMB share), rename() is atomic.
-    // If rename fails (e.g. cross-device), return error — temp cleaned by guard.
-    // A2 fix: rename MUST succeed before disarm() is called.
-    std::fs::rename(&temp_path, path).map_err(|e| {
+    // On the same filesystem (same SMB share), persist() translates to standard std::fs::rename atomically.
+    temp_file.persist(path).map_err(|e| {
         tracing::error!(
-            "fs::rename failed from {:?} to {:?}: {:?}",
-            temp_path,
+            "tempfile::persist failed to write tags over {:?}: {:?}",
             path,
             e
         );
-        if e.kind() == std::io::ErrorKind::CrossesDevices {
+        if e.error.kind() == std::io::ErrorKind::CrossesDevices {
             AppError::TagWrite {
                 path: path.to_owned(),
                 kind: TagWriteErrorKind::CrossDevice,
@@ -221,40 +222,10 @@ pub fn write_tags_atomic(path: &Path, tags: &TagData) -> Result<WriteResult, App
         .into();
     let new_size_bytes = meta.len().cast_signed();
 
-    // A2 fix: disarm AFTER rename succeeds — if rename had failed,
-    // the guard would have dropped and removed the temp file.
-    temp_guard.disarm();
-
     Ok(WriteResult {
         new_mtime,
         new_size_bytes,
     })
-}
-
-/// RAII: removes the temp file on drop unless disarmed.
-struct TempGuard {
-    path: std::path::PathBuf,
-    armed: bool,
-}
-
-impl TempGuard {
-    fn new(path: &Path) -> Self {
-        Self {
-            path: path.to_owned(),
-            armed: true,
-        }
-    }
-    fn disarm(&mut self) {
-        self.armed = false;
-    }
-}
-
-impl Drop for TempGuard {
-    fn drop(&mut self) {
-        if self.armed {
-            let _ = std::fs::remove_file(&self.path);
-        }
-    }
 }
 
 /// Returns true if the string contains LRC timestamp markers.

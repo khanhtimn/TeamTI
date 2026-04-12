@@ -1,0 +1,250 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tracks\n            SET analysis_status = 'processing', analysis_locked = true, updated_at = now()\n            WHERE id IN (\n                SELECT id FROM tracks\n                WHERE analysis_locked = false\n                  AND blob_location IS NOT NULL\n                  AND analysis_status IN ('pending', 'failed')\n                  AND analysis_attempts < 3\n                ORDER BY created_at ASC\n                LIMIT $1\n                FOR UPDATE SKIP LOCKED\n            )\n            RETURNING\n                id, title, artist_display, album_id, track_number, disc_number,\n                duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,\n                audio_fingerprint, file_modified_at,\n                file_size_bytes, blob_location, mbid, acoustid_id,\n                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,\n                enrichment_status as \"enrichment_status: EnrichmentStatus\",\n                enrichment_confidence, enrichment_attempts,\n                enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,\n                analysis_status as \"analysis_status: domain::AnalysisStatus\",\n                analysis_attempts, analysis_locked, analyzed_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "artist_display",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "album_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "track_number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "disc_number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "duration_ms",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "genres",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 8,
+        "name": "year",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "bpm",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "isrc",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "lyrics",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "bitrate",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "sample_rate",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "channels",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 15,
+        "name": "codec",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "audio_fingerprint",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "file_modified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 18,
+        "name": "file_size_bytes",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 19,
+        "name": "blob_location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "mbid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "acoustid_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "source",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 23,
+        "name": "youtube_video_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "youtube_channel_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 25,
+        "name": "youtube_uploader",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 26,
+        "name": "youtube_thumbnail_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 27,
+        "name": "enrichment_status: EnrichmentStatus",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 28,
+        "name": "enrichment_confidence",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 29,
+        "name": "enrichment_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 30,
+        "name": "enrichment_locked",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 31,
+        "name": "enriched_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 32,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 33,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 34,
+        "name": "tags_written_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 35,
+        "name": "analysis_status: domain::AnalysisStatus",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 36,
+        "name": "analysis_attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 37,
+        "name": "analysis_locked",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 38,
+        "name": "analyzed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "910a47c0c28c8029bcdd983d0a6b685855d8e04ac4766f718537501ff9f66725"
+}

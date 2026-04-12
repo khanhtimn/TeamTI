@@ -25,18 +25,21 @@ use adapters_persistence::repositories::playlist_repository::PgPlaylistRepositor
 use adapters_persistence::repositories::recommendation_repository::PgRecommendationRepository;
 use adapters_persistence::repositories::track_repository::PgTrackRepository;
 use adapters_persistence::repositories::user_library_repository::PgUserLibraryRepository;
+use adapters_persistence::repositories::youtube_repository::PgYoutubeRepository;
 use adapters_search::TantivySearchAdapter;
 use adapters_voice::state_map::GuildStateMap;
+use adapters_ytdlp::YtDlpAdapter;
 use application::events::{ToCoverArt, ToLastFm, ToLyrics, ToMusicBrainz, ToTagWriter};
 use application::ports::playlist::PlaylistPort;
 use application::ports::recommendation::RecommendationPort;
 use application::ports::repository::{AlbumRepository, ArtistRepository, TrackRepository};
 use application::ports::search::TrackSearchPort;
 use application::ports::user_library::UserLibraryPort;
+use application::ports::youtube::YoutubeRepository;
 use application::tag_writer_worker::run_startup_tag_poller;
 use application::{
     AcoustIdWorker, AnalysisWorker, CoverArtWorker, EnrichmentOrchestrator, LastFmWorker,
-    LyricsWorker, MusicBrainzWorker, TagWriterWorker,
+    LyricsWorker, MusicBrainzWorker, TagWriterWorker, YoutubeDownloadWorker,
 };
 use shared_config::Config;
 
@@ -53,6 +56,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::load();
     config.validate().expect("Invalid configuration");
     let config = Arc::new(config);
+
+    info!("Validating yt-dlp installation...");
+    match std::process::Command::new(&config.ytdlp_binary)
+        .arg("--version")
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout);
+            info!(version = %version.trim(), "yt-dlp validated successfully");
+        }
+        Ok(output) => {
+            panic!(
+                "Fatal: Configured yt-dlp binary '{}' returned non-zero status. Stderr: {}",
+                config.ytdlp_binary,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        Err(e) => {
+            panic!(
+                "Fatal: Configured yt-dlp binary '{}' cannot be executed. Error: {}",
+                config.ytdlp_binary, e
+            );
+        }
+    }
 
     info!("Connecting to database...");
     let db = Database::connect(&config.database_url, config.db_pool_size).await?;
@@ -305,6 +332,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
+    // ── YouTube infrastructure ──────────────────────────────────────────
+    let youtube_repo: Arc<dyn YoutubeRepository> = Arc::new(PgYoutubeRepository::new(db.clone()));
+
+    // Reset stale 'downloading' jobs from a previous crash
+    let yt_stale_reset = youtube_repo
+        .unlock_stale_download_jobs(std::time::Duration::from_mins(5))
+        .await
+        .expect("stale youtube download watchdog failed");
+    if yt_stale_reset > 0 {
+        info!(
+            count = yt_stale_reset,
+            "Reset stale YouTube download jobs to pending"
+        );
+    }
+
+    let ytdlp_adapter: Arc<dyn application::ports::ytdlp::YtDlpPort> = Arc::new(YtDlpAdapter::new(
+        config.ytdlp_binary.clone(),
+        config.ytdlp_cookies_file.clone(),
+    ));
+
+    let youtube_worker = Arc::new(YoutubeDownloadWorker {
+        ytdlp: Arc::clone(&ytdlp_adapter),
+        repo: Arc::clone(&youtube_repo),
+        semaphore: Arc::new(tokio::sync::Semaphore::new(
+            config.ytdlp_download_concurrency,
+        )),
+        media_root: config.media_root.clone(),
+        max_attempts: config.ytdlp_max_download_attempts,
+        in_flight: Arc::new(dashmap::DashSet::new()),
+    });
+
     let intents = GatewayIntents::GUILDS
         | GatewayIntents::GUILD_VOICE_STATES
         | GatewayIntents::GUILD_MESSAGES;
@@ -321,7 +379,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         playlist_port: Arc::clone(&playlist_port),
         user_library_port: Arc::clone(&user_library_port),
         recommendation_port: Arc::clone(&recommendation_port),
+        youtube_repo: Arc::clone(&youtube_repo),
+        ytdlp_port: Arc::clone(&ytdlp_adapter),
+        youtube_worker: Arc::clone(&youtube_worker),
         media_root: config.media_root.clone(),
+        ytdlp_binary: config.ytdlp_binary.clone(),
         auto_leave_secs: config.auto_leave_secs,
         songbird: songbird_instance.clone(),
         guild_state: Arc::clone(&state_map),
@@ -343,6 +405,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ulp = Arc::clone(&user_library_port);
         let rp = Arc::clone(&recommendation_port);
         let tr = Arc::clone(&track_repo) as Arc<dyn TrackRepository>;
+        let yw = Arc::clone(&youtube_worker);
         let gs = Arc::clone(&state_map);
         let sb = songbird_instance.clone();
         let tok = token.clone();
@@ -351,11 +414,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let media = config.media_root.clone();
         let als = config.auto_leave_secs;
         let ltx = lifecycle_tx.clone();
+        let ytdlp_bin = config.ytdlp_binary.clone();
         tokio::spawn(async move {
             tokio::select! {
                 biased;
                 () = tok.cancelled() => {}
-                () = run_lifecycle_worker(lifecycle_rx, ulp, rp, tr, gs, sb, http_clone, cache_clone, media, als, ltx) => {}
+                () = run_lifecycle_worker(lifecycle_rx, ulp, rp, tr, yw, gs, sb, http_clone, cache_clone, media, als, ltx, ytdlp_bin) => {}
             }
         });
     }

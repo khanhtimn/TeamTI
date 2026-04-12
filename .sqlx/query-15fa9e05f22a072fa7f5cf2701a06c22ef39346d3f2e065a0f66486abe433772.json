@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                video_id, track_id, url, status, attempts, error_message,\n                created_at, started_at, completed_at\n            FROM youtube_download_jobs WHERE video_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "video_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "track_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "attempts",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "error_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "15fa9e05f22a072fa7f5cf2701a06c22ef39346d3f2e065a0f66486abe433772"
+}

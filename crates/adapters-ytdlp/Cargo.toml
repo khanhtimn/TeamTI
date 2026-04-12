@@ -1,0 +1,17 @@
+[package]
+name = "adapters-ytdlp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+application = { path = "../application" }
+domain = { path = "../domain" }
+
+tokio = { workspace = true, features = ["process", "fs", "sync", "time", "io-util"] }
+serde = { workspace = true, features = ["default", "derive"] }
+serde_json = { workspace = true, features = ["default"] }
+tracing = { workspace = true, features = ["default"] }
+async-trait = { workspace = true }
+tempfile = { workspace = true }
+sanitize-filename = { workspace = true }

@@ -14,4 +14,5 @@ async-trait.workspace = true
 chrono = { workspace = true, features = ["serde", "clock"] }
 bytes.workspace = true
 tracing = { workspace = true, features = ["default"] }
+dashmap = { workspace = true }
 

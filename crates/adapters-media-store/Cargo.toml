@@ -17,7 +17,8 @@ async-trait.workspace = true
 uuid = { workspace = true, features = ["v4", "serde", "fast-rng"] }
 chrono = { workspace = true, features = ["default", "serde"] }
 bytes.workspace = true
-symphonia = { workspace = true, features = ["mp3", "aac", "isomp4", "alac", "ogg", "vorbis", "wav", "flac"] }
+symphonia = { workspace = true, features = ["mp3", "aac", "isomp4", "alac", "ogg", "vorbis", "wav", "flac", "mkv"] }
+tempfile = { workspace = true }
 lofty.workspace = true
 unicode-normalization.workspace = true
 walkdir.workspace = true

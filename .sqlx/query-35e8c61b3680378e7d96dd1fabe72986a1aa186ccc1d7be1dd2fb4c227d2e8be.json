@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO youtube_download_jobs (video_id, track_id, url)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (video_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "35e8c61b3680378e7d96dd1fabe72986a1aa186ccc1d7be1dd2fb4c227d2e8be"
+}

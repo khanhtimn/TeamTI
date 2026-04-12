@@ -101,6 +101,22 @@ pub struct Config {
 
     /// Seconds between analysis worker poll cycles. Default: 30.
     pub analysis_poll_secs: u64,
+
+    // --- v4 fields: YouTube ---
+    /// Path to the yt-dlp binary. Default: "yt-dlp" (uses $PATH).
+    pub ytdlp_binary: String,
+
+    /// Optional: path to Netscape-format cookies file for bot detection bypass.
+    pub ytdlp_cookies_file: Option<String>,
+
+    /// Max simultaneous yt-dlp download processes. Default: 2.
+    pub ytdlp_download_concurrency: usize,
+
+    /// Number of tracks ahead in queue to pre-download (just-in-time). Default: 3.
+    pub ytdlp_lookahead_depth: usize,
+
+    /// Max download attempts before permanent failure. Default: 5.
+    pub ytdlp_max_download_attempts: u32,
 }
 
 impl Config {
@@ -147,6 +163,13 @@ impl Config {
                 .filter(|s| !s.is_empty()),
             analysis_concurrency: parse_env("ANALYSIS_CONCURRENCY", 4usize)?,
             analysis_poll_secs: parse_env("ANALYSIS_POLL_SECS", 30u64)?,
+            ytdlp_binary: std::env::var("YTDLP_BINARY").unwrap_or_else(|_| "yt-dlp".to_string()),
+            ytdlp_cookies_file: std::env::var("YTDLP_COOKIES_FILE")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            ytdlp_download_concurrency: parse_env("YTDLP_DOWNLOAD_CONCURRENCY", 2usize)?,
+            ytdlp_lookahead_depth: parse_env("YTDLP_LOOKAHEAD_DEPTH", 3usize)?,
+            ytdlp_max_download_attempts: parse_env("YTDLP_MAX_DOWNLOAD_ATTEMPTS", 5u32)?,
         })
     }
 

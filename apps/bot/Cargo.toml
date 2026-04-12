@@ -17,6 +17,7 @@ adapters-lyrics = { path = "../../crates/adapters-lyrics" }
 adapters-search = { path = "../../crates/adapters-search" }
 adapters-analysis = { path = "../../crates/adapters-analysis" }
 adapters-lastfm = { path = "../../crates/adapters-lastfm" }
+adapters-ytdlp = { path = "../../crates/adapters-ytdlp" }
 shared-config = { path = "../../crates/shared-config" }
 dashmap = { workspace = true, features = ["inline"] }
 

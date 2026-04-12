@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use serenity::all::Http;
@@ -312,10 +313,11 @@ pub fn build_favourites_embed<'a>(
                     format!("{}:{:02}", s / 60, s % 60)
                 })
                 .unwrap_or_default();
-            description.push_str(&format!(
-                "`{idx}.` **{}** — {artist} `{dur}`\n",
+            let _ = writeln!(
+                description,
+                "`{idx}.` **{}** — {artist} `{dur}`",
                 track.title
-            ));
+            );
         }
     }
 

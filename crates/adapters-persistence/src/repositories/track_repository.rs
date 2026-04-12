@@ -29,6 +29,7 @@ impl TrackRepository for PgTrackRepository {
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
+                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
                 enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
@@ -52,6 +53,7 @@ impl TrackRepository for PgTrackRepository {
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
+                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
                 enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
@@ -75,6 +77,7 @@ impl TrackRepository for PgTrackRepository {
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
+                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
                 enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
@@ -109,6 +112,7 @@ impl TrackRepository for PgTrackRepository {
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
+                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
                 enrichment_status as "enrichment_status: _", 
                 enrichment_confidence, enrichment_attempts,
                 enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
@@ -125,7 +129,10 @@ impl TrackRepository for PgTrackRepository {
 
         let map: std::collections::HashMap<String, Track> = tracks
             .into_iter()
-            .map(|t| (t.blob_location.clone(), t))
+            .filter_map(|t| {
+                let loc = t.blob_location.clone()?;
+                Some((loc, t))
+            })
             .collect();
 
         Ok(map)
@@ -139,6 +146,57 @@ impl TrackRepository for PgTrackRepository {
             .await
             .map_err(crate::db_err!("track.insert"))?;
 
+        // 1. Try to merge with an existing stub (YouTube track) or an existing file (blob_location)
+        let merge_target = sqlx::query!(
+            "SELECT id FROM tracks WHERE (youtube_video_id IS NOT NULL AND youtube_video_id = $1)
+             OR (blob_location IS NOT NULL AND blob_location = $2) LIMIT 1",
+            track.youtube_video_id.clone(),
+            track.blob_location.clone()
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(crate::db_err!("track.insert"))?;
+
+        if let Some(existing) = merge_target {
+            sqlx::query!(
+                "UPDATE tracks
+                 SET audio_fingerprint = $1, file_size_bytes = $2, duration_ms = $3, blob_location = $4, file_modified_at = $5, enrichment_status = 'pending', updated_at = now()
+                 WHERE id = $6",
+                track.audio_fingerprint.clone(),
+                track.file_size_bytes,
+                track.duration_ms,
+                track.blob_location.clone(),
+                track.file_modified_at,
+                existing.id
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(crate::db_err!("track.insert_merge"))?;
+
+            let returned = sqlx::query_as!(
+                Track,
+                r#"SELECT
+                    id, title, artist_display, album_id, track_number, disc_number,
+                    duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
+                    audio_fingerprint, file_modified_at,
+                    file_size_bytes, blob_location, mbid, acoustid_id,
+                    source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
+                    enrichment_status as "enrichment_status: EnrichmentStatus",
+                    enrichment_confidence, enrichment_attempts,
+                    enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
+                    analysis_status as "analysis_status: domain::AnalysisStatus",
+                    analysis_attempts, analysis_locked, analyzed_at
+                FROM tracks WHERE id = $1"#,
+                existing.id
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(crate::db_err!("track.insert_merge_fetch"))?;
+
+            tx.commit().await.map_err(crate::db_err!("track.insert"))?;
+            return Ok((returned, false));
+        }
+
         let result = sqlx::query!(
             r#"
             INSERT INTO tracks (
@@ -146,12 +204,14 @@ impl TrackRepository for PgTrackRepository {
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
+                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
                 enrichment_status, enrichment_confidence, enrichment_attempts,
                 enrichment_locked, enriched_at, created_at, updated_at
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24,
-                $25, $26, $27, $28, $29
+                $14, $15, $16, $17, $18, $19, $20, $21, $22,
+                $23, $24, $25, $26, $27,
+                $28, $29, $30, $31, $32, $33, $34
             )
             ON CONFLICT (fingerprint_hash) DO NOTHING
             "#,
@@ -177,6 +237,11 @@ impl TrackRepository for PgTrackRepository {
             track.blob_location,
             track.mbid,
             track.acoustid_id,
+            track.source,
+            track.youtube_video_id,
+            track.youtube_channel_id,
+            track.youtube_uploader,
+            track.youtube_thumbnail_url,
             &track.enrichment_status as &EnrichmentStatus,
             track.enrichment_confidence,
             track.enrichment_attempts,
@@ -215,6 +280,7 @@ impl TrackRepository for PgTrackRepository {
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
+                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
                 enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
@@ -389,6 +455,7 @@ impl TrackRepository for PgTrackRepository {
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
+                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
                 enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
@@ -419,6 +486,7 @@ impl TrackRepository for PgTrackRepository {
             WHERE id IN (
                 SELECT id FROM tracks
                 WHERE enrichment_locked = false
+                  AND blob_location IS NOT NULL
                   AND (
                     (enrichment_status IN ('pending', 'failed', 'low_confidence')
                      AND enrichment_attempts < $1
@@ -437,6 +505,7 @@ impl TrackRepository for PgTrackRepository {
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
+                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
                 enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
@@ -551,6 +620,7 @@ impl TrackRepository for PgTrackRepository {
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
+                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
                 enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,
@@ -631,6 +701,7 @@ impl TrackRepository for PgTrackRepository {
             WHERE id IN (
                 SELECT id FROM tracks
                 WHERE analysis_locked = false
+                  AND blob_location IS NOT NULL
                   AND analysis_status IN ('pending', 'failed')
                   AND analysis_attempts < 3
                 ORDER BY created_at ASC
@@ -642,6 +713,7 @@ impl TrackRepository for PgTrackRepository {
                 duration_ms, genres, year, bpm, isrc, lyrics, bitrate, sample_rate, channels, codec,
                 audio_fingerprint, file_modified_at,
                 file_size_bytes, blob_location, mbid, acoustid_id,
+                source, youtube_video_id, youtube_channel_id, youtube_uploader, youtube_thumbnail_url,
                 enrichment_status as "enrichment_status: EnrichmentStatus",
                 enrichment_confidence, enrichment_attempts,
                 enrichment_locked, enriched_at, created_at, updated_at, tags_written_at,

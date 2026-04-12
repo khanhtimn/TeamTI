@@ -10,6 +10,7 @@ adapters-persistence = { path = "../adapters-persistence" }
 application = { path = "../application" }
 domain = { path = "../domain" }
 shared-config = { path = "../shared-config" }
+adapters-ytdlp = { path = "../adapters-ytdlp" }
 
 songbird = { workspace = true, features = ["serenity"] }
 serenity = { workspace = true, features = [

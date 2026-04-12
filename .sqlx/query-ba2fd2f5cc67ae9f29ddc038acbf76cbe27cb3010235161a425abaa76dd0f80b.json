@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM tracks\n            WHERE youtube_video_id = $1\n              AND NOT EXISTS (\n                  SELECT 1 FROM listen_events WHERE track_id = tracks.id\n              )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba2fd2f5cc67ae9f29ddc038acbf76cbe27cb3010235161a425abaa76dd0f80b"
+}

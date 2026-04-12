@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tracks\n            SET blob_location = $2, updated_at = now()\n            WHERE youtube_video_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bcd9eab315f7b8a7c12f6557e53fd0d95c1c59d33ae8809c1e6bdbcf37e3b5e0"
+}

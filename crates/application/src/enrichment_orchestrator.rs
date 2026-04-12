@@ -73,7 +73,7 @@ impl EnrichmentOrchestrator {
                         fingerprint:         scanned.fingerprint,
                         duration_ms:         scanned.duration_ms,
                         enrichment_attempts: track.enrichment_attempts,
-                        blob_location:       track.blob_location,
+                        blob_location:       track.blob_location.unwrap_or_default(),
                         correlation_id:      scanned.correlation_id,
                     }).await;
                 }
@@ -99,26 +99,37 @@ impl EnrichmentOrchestrator {
                     "orchestrator: claimed tracks for enrichment batch"
                 );
                 for track in tracks {
-                    match (&track.audio_fingerprint, track.duration_ms) {
-                        (Some(fp), Some(dur)) => {
-                            let _ = acoustid_tx
-                                .send(AcoustIdRequest {
-                                    track_id: track.id,
-                                    fingerprint: fp.clone(),
-                                    duration_ms: dur,
-                                    enrichment_attempts: track.enrichment_attempts,
-                                    blob_location: track.blob_location.clone(),
-                                    correlation_id: uuid::Uuid::new_v4(),
-                                })
-                                .await;
-                        }
-                        _ => {
-                            warn!(
-                                "orchestrator: track {} missing fingerprint \
-                                 or duration, cannot enrich — skipping",
-                                track.id
-                            );
-                        }
+                    if let (Some(fp), Some(dur)) = (&track.audio_fingerprint, track.duration_ms) {
+                        let _ = acoustid_tx
+                            .send(AcoustIdRequest {
+                                track_id: track.id,
+                                fingerprint: fp.clone(),
+                                duration_ms: dur,
+                                enrichment_attempts: track.enrichment_attempts,
+                                blob_location: track.blob_location.clone().unwrap_or_default(),
+                                correlation_id: uuid::Uuid::new_v4(),
+                            })
+                            .await;
+                    } else {
+                        warn!(
+                            "orchestrator: track {} missing fingerprint \
+                              or duration, cannot enrich — reverting to pending",
+                            track.id
+                        );
+
+                        // Prevent permanent DB lockups by transitioning state natively
+                        // back to 'pending' allowing future proactive loops to discover it.
+                        // F10: Increment attempts so permanently unfingerprintable files
+                        // eventually hit the retry limit instead of looping forever.
+                        let _ = self
+                            .repo
+                            .update_enrichment_status(
+                                track.id,
+                                &domain::EnrichmentStatus::Pending,
+                                track.enrichment_attempts + 1,
+                                None,
+                            )
+                            .await;
                     }
                 }
             }
