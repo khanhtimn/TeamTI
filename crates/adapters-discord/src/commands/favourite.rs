@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::commands::pagination::{PAGE_SIZE, build_nav_buttons, total_pages};
 use adapters_voice::state_map::GuildStateMap;
+use application::ports::MusicSearchPort;
 use application::ports::user_library::UserLibraryPort;
 
 pub fn register() -> CreateCommand<'static> {
@@ -95,7 +96,7 @@ pub async fn run(
 pub async fn autocomplete(
     http: &Http,
     interaction: &CommandInteraction,
-    search_port: &Arc<dyn application::ports::search::TrackSearchPort>,
+    search_port: &Arc<dyn MusicSearchPort>,
 ) {
     // Track autocomplete for add/remove: get the focused value from raw options
     let Some(subcmd) = interaction.data.options.first() else {
@@ -118,11 +119,14 @@ pub async fn autocomplete(
         })
         .unwrap_or("");
 
-    match search_port.autocomplete(query, 25).await {
+    match search_port
+        .autocomplete(query, domain::search::SearchFilter::All, 25)
+        .await
+    {
         Ok(results) => {
             let choices: Vec<_> = results
                 .into_iter()
-                .map(|r| {
+                .filter_map(|r| {
                     let raw = if let Some(artist) = &r.artist_display {
                         format!("{} — {}", r.title, artist)
                     } else {
@@ -134,7 +138,19 @@ pub async fn autocomplete(
                     } else {
                         raw
                     };
-                    serenity::builder::AutocompleteChoice::new(display, r.id.to_string())
+                    let submission_value = match (r.track_id, r.youtube_video_id) {
+                        (Some(tid), _) => {
+                            domain::autocomplete::SubmissionValue::TrackId(tid).serialize()
+                        }
+                        (None, Some(vid)) => {
+                            domain::autocomplete::SubmissionValue::YoutubeVideoId(vid).serialize()
+                        }
+                        _ => return None,
+                    };
+                    Some(serenity::builder::AutocompleteChoice::new(
+                        display,
+                        submission_value,
+                    ))
                 })
                 .collect();
 
@@ -345,7 +361,11 @@ fn extract_uuid_option(
     opts.iter()
         .find(|o| o.name == name)
         .and_then(|o| match o.value {
-            ResolvedValue::String(s) => Uuid::parse_str(s).ok(),
+            ResolvedValue::String(s) => match domain::autocomplete::SubmissionValue::deserialize(s)
+            {
+                Ok(domain::autocomplete::SubmissionValue::TrackId(id)) => Some(id),
+                _ => uuid::Uuid::parse_str(s).ok(),
+            },
             _ => None,
         })
 }

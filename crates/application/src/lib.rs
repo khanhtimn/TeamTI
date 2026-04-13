@@ -9,6 +9,7 @@ pub mod lyrics_worker;
 pub mod musicbrainz_worker;
 pub mod ports;
 pub mod tag_writer_worker;
+pub mod youtube_search_worker;
 pub mod youtube_worker;
 
 // Keep v1 services module for adapter compatibility during transition

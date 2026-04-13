@@ -11,7 +11,7 @@ shared-config = { path = "../shared-config" }
 
 tantivy     = { workspace = true, features = ["mmap", "zstd-compression", "sstable", "compare_hash_only"] }
 tokio       = { workspace = true, features = ["rt", "sync"] }
-sqlx        = { workspace = true, features = ["postgres", "uuid"] }
+sqlx        = { workspace = true, features = ["postgres", "uuid", "macros", "runtime-tokio", "chrono"] }
 uuid = { workspace = true, features = ["v4", "serde", "fast-rng"] }
 tracing = { workspace = true, features = ["default"] }
 thiserror = { workspace = true, features = ["default"] }
@@ -19,3 +19,4 @@ async-trait = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }
+chrono = { workspace = true, features = ["clock"] }

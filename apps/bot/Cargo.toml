@@ -19,8 +19,9 @@ adapters-analysis = { path = "../../crates/adapters-analysis" }
 adapters-lastfm = { path = "../../crates/adapters-lastfm" }
 adapters-ytdlp = { path = "../../crates/adapters-ytdlp" }
 shared-config = { path = "../../crates/shared-config" }
-dashmap = { workspace = true, features = ["inline"] }
 
+dashmap = { workspace = true, features = ["inline"] }
+moka = { workspace = true, features = ["future", "logging"] }
 tokio = { workspace = true, features = ["full"] }
 serenity = { workspace = true, features = [
     "gateway",

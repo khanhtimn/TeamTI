@@ -44,3 +44,37 @@ CREATE TABLE IF NOT EXISTS youtube_download_jobs (
 CREATE INDEX IF NOT EXISTS idx_youtube_download_jobs_status
     ON youtube_download_jobs(status, attempts)
     WHERE status IN ('pending', 'failed');
+
+-- ── Transient YouTube search result stubs ──────────────────────────────
+-- These are NOT playable tracks — they are metadata previews from
+-- YouTube search results used to enrich autocomplete suggestions.
+-- Cleanup is deferred to a later pass; rows accumulate safely.
+--
+-- Separation rationale: tracks = confirmed playable local media only.
+-- youtube_search_cache = ephemeral search stubs that may never be played.
+CREATE TABLE IF NOT EXISTS youtube_search_cache (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    video_id      TEXT NOT NULL,
+    title         TEXT NOT NULL,
+    uploader      TEXT,
+    channel_id    TEXT,
+    duration_ms   INTEGER,
+    thumbnail_url TEXT,
+    -- Normalised search query that surfaced this result.
+    -- A video may appear under multiple queries; only the first is stored.
+    query         TEXT NOT NULL,
+    -- If this video was subsequently queued/downloaded, link to the tracks row.
+    -- ON DELETE SET NULL: the search stub outlives its associated track row.
+    track_id      UUID REFERENCES tracks(id) ON DELETE SET NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_youtube_search_cache_video_id
+    ON youtube_search_cache(video_id);
+
+CREATE INDEX IF NOT EXISTS idx_youtube_search_cache_query
+    ON youtube_search_cache(query text_pattern_ops);
+
+CREATE INDEX IF NOT EXISTS idx_youtube_search_cache_last_seen
+    ON youtube_search_cache(last_seen_at DESC);

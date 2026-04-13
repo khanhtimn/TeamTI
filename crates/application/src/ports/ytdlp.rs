@@ -24,4 +24,8 @@ pub trait YtDlpPort: Send + Sync {
 
     /// Compute the blob path for a YouTube video.
     fn compute_blob_path(&self, uploader: &str, title: &str, video_id: &str) -> String;
+
+    /// Search YouTube and return top N results as metadata.
+    /// Internally uses "ytsearch{n}:{query}".
+    async fn search_top_n(&self, query: &str, n: usize) -> Result<Vec<VideoMetadata>, AppError>;
 }

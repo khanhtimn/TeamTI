@@ -174,3 +174,34 @@ pub trait AlbumRepository: Send + Sync {
     /// B3 fix: find album by ID for tag writeback.
     async fn find_by_id(&self, id: Uuid) -> Result<Option<Album>, AppError>;
 }
+
+#[async_trait]
+pub trait YoutubeSearchRepository: Send + Sync {
+    /// Upsert a search result into youtube_search_cache.
+    /// ON CONFLICT (video_id) DO UPDATE SET last_seen_at = now().
+    async fn upsert_search_result(
+        &self,
+        query: &str,
+        result: &domain::youtube::VideoMetadata,
+    ) -> Result<(), AppError>;
+
+    /// Look up a single search cache entry by video_id.
+    async fn find_search_cache_by_video_id(
+        &self,
+        video_id: &str,
+    ) -> Result<Option<domain::youtube::YoutubeSearchCacheRow>, AppError>;
+
+    /// Given a list of video_ids, return those that already exist in tracks.
+    /// Used to avoid indexing duplicates in Tantivy.
+    async fn find_existing_video_ids(
+        &self,
+        video_ids: &[String],
+    ) -> Result<std::collections::HashSet<String>, AppError>;
+
+    /// Update youtube_search_cache.track_id when a search stub is downloaded.
+    async fn link_search_cache_to_track(
+        &self,
+        video_id: &str,
+        track_id: Uuid,
+    ) -> Result<(), AppError>;
+}

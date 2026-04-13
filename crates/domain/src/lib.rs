@@ -1,7 +1,9 @@
 pub mod album;
 pub mod analysis;
 pub mod artist;
+pub mod autocomplete;
 pub mod enrichment;
+pub mod search;
 pub mod track;
 pub mod user_library;
 pub mod youtube;

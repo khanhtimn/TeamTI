@@ -7,7 +7,7 @@ use tantivy::{
 };
 
 use application::{AppError, SearchErrorKind};
-use domain::track::TrackSummary;
+use domain::search::{SearchFilter, SearchResult};
 
 use crate::{schema::MusicSchema, tokenizer::build_music_tokenizer};
 
@@ -41,7 +41,12 @@ impl MusicSearcher {
         })
     }
 
-    pub fn search(&self, raw_query: &str, limit: usize) -> Result<Vec<TrackSummary>, AppError> {
+    pub fn search(
+        &self,
+        raw_query: &str,
+        filter: &SearchFilter,
+        limit: usize,
+    ) -> Result<Vec<SearchResult>, AppError> {
         let trimmed = raw_query.trim();
         if trimmed.is_empty() {
             return Ok(vec![]);
@@ -52,10 +57,56 @@ impl MusicSearcher {
             return Ok(vec![]);
         }
 
-        let query = self.build_query(&tokens);
+        let mut query = self.build_query(&tokens);
+
+        if *filter == SearchFilter::YoutubeOnly {
+            let mut should_clauses: Vec<(Occur, Box<dyn Query>)> = Vec::new();
+
+            let term_youtube = Term::from_field_text(self.schema.source, "youtube");
+            should_clauses.push((
+                Occur::Should,
+                Box::new(TermQuery::new(term_youtube, IndexRecordOption::Basic)),
+            ));
+
+            let term_youtube_search = Term::from_field_text(self.schema.source, "youtube_search");
+            should_clauses.push((
+                Occur::Should,
+                Box::new(TermQuery::new(
+                    term_youtube_search,
+                    IndexRecordOption::Basic,
+                )),
+            ));
+
+            let filter_query = Box::new(BooleanQuery::new(should_clauses));
+
+            query = Box::new(BooleanQuery::new(vec![
+                (Occur::Must, query),
+                (Occur::Must, filter_query),
+            ]));
+        } else if *filter == SearchFilter::LocalOnly {
+            let term_tracks = Term::from_field_text(self.schema.source, "tracks");
+            let filter_query = Box::new(TermQuery::new(term_tracks, IndexRecordOption::Basic));
+
+            query = Box::new(BooleanQuery::new(vec![
+                (Occur::Must, query),
+                (Occur::Must, filter_query),
+            ]));
+        } else {
+            // Filter is All. S2: apply a slight boost to local tracks so they outrank transient stubs
+            let term_tracks = Term::from_field_text(self.schema.source, "tracks");
+            let local_boost = Box::new(BoostQuery::new(
+                Box::new(TermQuery::new(term_tracks, IndexRecordOption::Basic)),
+                1.5,
+            ));
+            query = Box::new(BooleanQuery::new(vec![
+                (Occur::Must, query),
+                (Occur::Should, local_boost),
+            ]));
+        }
+
         tracing::debug!("{:?}", query);
         let searcher = self.reader.searcher();
-
+        let play_count_field = self.schema.play_count;
         let top_docs = searcher
             .search(&*query, &TopDocs::with_limit(limit).order_by_score())
             .map_err(|e| AppError::Search {
@@ -64,17 +115,67 @@ impl MusicSearcher {
             })?;
 
         let mut results = Vec::with_capacity(top_docs.len());
-        for (_score, addr) in top_docs {
+        for (score, addr) in top_docs {
             let doc: TantivyDocument = searcher.doc(addr).map_err(|e| AppError::Search {
                 kind: SearchErrorKind::ReadFailed,
                 detail: e.to_string(),
             })?;
-            if let Some(summary) = self.doc_to_summary(&doc) {
-                results.push(summary);
+            if let Some(summary) = self.doc_to_search_result(&doc) {
+                // Post-process tweak using stored play_count to slightly weight popular results
+                // O1: play count heuristic
+                results.push((
+                    summary,
+                    doc.get_first(play_count_field)
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0),
+                    score,
+                ));
             }
         }
 
-        Ok(results)
+        // M2: Deterministic tie-breaking for stable autocomplete ordering.
+        // 1. Higher score first
+        // 2. Higher play_count (local tracks with listens outrank stubs)
+        // 3. Source priority: tracks > youtube > youtube_search
+        // 4. Stable ID for absolute determinism
+        results.sort_by(|a, b| {
+            // Primary: Tantivy score
+            if (a.2 - b.2).abs() > 0.01 {
+                return b.2.partial_cmp(&a.2).unwrap();
+            }
+            // Secondary: play count
+            if a.1 != b.1 {
+                return b.1.cmp(&a.1);
+            }
+            // Tertiary: source priority
+            let source_order = |s: &str| -> u8 {
+                match s {
+                    "tracks" => 0,
+                    "youtube" => 1,
+                    "youtube_search" => 2,
+                    _ => 3,
+                }
+            };
+            let sa = source_order(&a.0.source);
+            let sb = source_order(&b.0.source);
+            if sa != sb {
+                return sa.cmp(&sb);
+            }
+            // Quaternary: stable ID sort
+            let id_a =
+                a.0.track_id
+                    .map(|t| t.to_string())
+                    .or_else(|| a.0.youtube_video_id.clone())
+                    .unwrap_or_default();
+            let id_b =
+                b.0.track_id
+                    .map(|t| t.to_string())
+                    .or_else(|| b.0.youtube_video_id.clone())
+                    .unwrap_or_default();
+            id_a.cmp(&id_b)
+        });
+
+        Ok(results.into_iter().map(|(r, _, _)| r).collect())
     }
 
     /// Build the full compound query for a tokenized input.
@@ -143,15 +244,18 @@ impl MusicSearcher {
         Box::new(BooleanQuery::new(should))
     }
 
-    /// Extract a `TrackSummary` from a retrieved Tantivy document.
-    fn doc_to_summary(&self, doc: &TantivyDocument) -> Option<TrackSummary> {
+    /// Extract a `SearchResult` from a retrieved Tantivy document.
+    fn doc_to_search_result(&self, doc: &TantivyDocument) -> Option<SearchResult> {
         let s = &self.schema;
 
-        let track_id = doc
-            .get_first(s.track_id)?
-            .as_str()?
-            .parse::<uuid::Uuid>()
-            .ok()?;
+        let source = doc.get_first(s.source)?.as_str()?.to_owned();
+
+        let track_id_str = doc.get_first(s.track_id)?.as_str()?;
+        let track_id = if track_id_str.is_empty() {
+            None
+        } else {
+            track_id_str.parse::<uuid::Uuid>().ok()
+        };
 
         let title = doc.get_first(s.title)?.as_str()?.to_owned();
 
@@ -160,17 +264,30 @@ impl MusicSearcher {
             .and_then(|v| v.as_str())
             .map(str::to_owned);
 
-        let album_title = doc
-            .get_first(s.album)
+        let uploader = doc
+            .get_first(s.uploader)
             .and_then(|v| v.as_str())
             .map(str::to_owned);
 
-        Some(TrackSummary {
-            id: track_id,
+        let youtube_video_id = doc
+            .get_first(s.youtube_video_id)
+            .and_then(|v| v.as_str())
+            .map(str::to_owned);
+
+        let duration_ms = doc
+            .get_first(s.duration_ms)
+            .and_then(|v| v.as_u64())
+            .map(u64::cast_signed)
+            .filter(|&v| v > 0);
+
+        Some(SearchResult {
+            source,
+            track_id,
+            youtube_video_id,
             title,
             artist_display,
-            album_title,
-            ..TrackSummary::default()
+            uploader,
+            duration_ms,
         })
     }
 

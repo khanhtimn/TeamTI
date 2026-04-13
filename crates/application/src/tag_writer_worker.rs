@@ -8,7 +8,7 @@ use crate::AppError;
 use crate::events::ToTagWriter;
 use crate::ports::file_ops::{FileTagWriterPort, TagData};
 use crate::ports::repository::{AlbumRepository, ArtistRepository, TrackRepository};
-use crate::ports::search::TrackSearchPort;
+use crate::ports::search::MusicSearchPort;
 
 /// A1 fix: `TagWriterWorker` has NO `smb_semaphore` field.
 /// The `FileTagWriterPort` owns SMB semaphore acquisition internally.
@@ -18,7 +18,7 @@ pub struct TagWriterWorker {
     pub track_repo: Arc<dyn TrackRepository>,
     pub album_repo: Arc<dyn AlbumRepository>,
     pub artist_repo: Arc<dyn ArtistRepository>,
-    pub search_port: Arc<dyn TrackSearchPort>,
+    pub search_port: Arc<dyn MusicSearchPort>,
     /// C1 fix: limits concurrent tag write tasks to avoid unbounded spawning.
     /// Default: 2 (D2 fix: each task loads the full file into memory).
     pub task_semaphore: Arc<Semaphore>,

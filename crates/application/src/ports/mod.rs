@@ -21,7 +21,7 @@ pub use lastfm::LastFmPort;
 pub use playlist::PlaylistPort;
 pub use recommendation::RecommendationPort;
 pub use repository::{AlbumRepository, ArtistRepository, TrackRepository};
-pub use search::TrackSearchPort;
+pub use search::MusicSearchPort;
 pub use user_library::UserLibraryPort;
 pub use youtube::YoutubeRepository;
 pub use ytdlp::YtDlpPort;

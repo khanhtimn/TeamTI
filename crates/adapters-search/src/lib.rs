@@ -3,6 +3,9 @@ pub mod schema;
 pub mod searcher;
 pub mod tokenizer;
 
+#[cfg(test)]
+mod tests;
+
 use std::{path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
@@ -11,10 +14,10 @@ use tantivy::{Index, IndexWriter, directory::MmapDirectory};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use application::{AppError, SearchErrorKind, ports::search::TrackSearchPort};
-use domain::track::TrackSummary;
+use application::{AppError, SearchErrorKind, ports::search::MusicSearchPort};
+use domain::search::{SearchFilter, SearchResult};
+use indexer::ToSearchDoc;
 
-use indexer::{rebuild_index, reindex_track};
 use schema::MusicSchema;
 use searcher::MusicSearcher;
 
@@ -51,12 +54,44 @@ impl TantivySearchAdapter {
 
             if let Ok(dir) = dir_result {
                 if let Ok(idx) = Index::open(dir) {
-                    tracing::debug!(
-                        path = %path.display(),
-                        operation = "search.index_opened",
-                        "opened existing Tantivy index"
-                    );
-                    idx
+                    // Schema migration guard: detect field count mismatch between
+                    // the on-disk index and the current compiled schema. If they
+                    // diverge, the old segments contain documents with a different
+                    // field layout, which causes panics on FAST field access.
+                    let on_disk_fields = idx.schema().fields().count();
+                    let expected_fields = schema.schema.fields().count();
+
+                    if on_disk_fields == expected_fields {
+                        tracing::debug!(
+                            path = %path.display(),
+                            operation = "search.index_opened",
+                            "opened existing Tantivy index"
+                        );
+                        idx
+                    } else {
+                        tracing::warn!(
+                            on_disk_fields,
+                            expected_fields,
+                            path = %path.display(),
+                            operation = "search.schema_migration",
+                            "schema mismatch detected — deleting stale index and recreating"
+                        );
+                        // Drop the old index handle before removing files
+                        drop(idx);
+                        // Remove stale index directory and recreate
+                        std::fs::remove_dir_all(path).map_err(io_err)?;
+                        std::fs::create_dir_all(path).map_err(io_err)?;
+                        let dir = MmapDirectory::open(path).map_err(|e| AppError::Search {
+                            kind: SearchErrorKind::OpenFailed,
+                            detail: e.to_string(),
+                        })?;
+                        Index::create(
+                            dir,
+                            schema.schema.clone(),
+                            tantivy::IndexSettings::default(),
+                        )
+                        .map_err(open_err)?
+                    }
                 } else {
                     // Directory exists but is not a valid index — create fresh.
                     tracing::info!(
@@ -105,33 +140,25 @@ impl TantivySearchAdapter {
 
     /// Full rebuild from PostgreSQL. Blocks until complete.
     pub async fn rebuild_all(&self) -> Result<usize, AppError> {
+        let (rows, cache_rows) = indexer::fetch_rebuild_data(&self.pool).await?;
         let mut w = self.writer.lock().await;
-        rebuild_index(&mut w, &self.pool, &self.schema).await
+        indexer::execute_rebuild(&mut w, &self.schema, &rows, &cache_rows)
     }
 
     /// Reindex a single track after enrichment completes.
     pub async fn reindex_one(&self, track_id: Uuid) -> Result<(), AppError> {
+        let row_opt = indexer::fetch_single_track(&self.pool, track_id).await?;
         let mut w = self.writer.lock().await;
 
-        reindex_track(&mut w, &self.pool, &self.schema, track_id).await?;
+        indexer::execute_reindex_track(&mut w, &self.schema, track_id, row_opt.as_ref())?;
 
         let pending = self
             .pending_writes
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             + 1;
 
-        // Commit every 20 writes to aggregate I/O or immediately if only one is pending
-        // TODO Pass 1.2: implement debounced commit for batch enrichment paths.
-        // Currently commits on every reindex. Acceptable for <100 tracks/run;
-        // revisit if large backlog processing becomes a bottleneck.
+        // Commit every 20 writes to aggregate I/O.
         if pending >= 20 {
-            w.commit().map_err(|e| AppError::Search {
-                kind: SearchErrorKind::WriteFailed,
-                detail: e.to_string(),
-            })?;
-            self.pending_writes
-                .store(0, std::sync::atomic::Ordering::Relaxed);
-        } else {
             w.commit().map_err(|e| AppError::Search {
                 kind: SearchErrorKind::WriteFailed,
                 detail: e.to_string(),
@@ -144,15 +171,20 @@ impl TantivySearchAdapter {
 }
 
 #[async_trait]
-impl TrackSearchPort for TantivySearchAdapter {
-    async fn autocomplete(&self, query: &str, limit: usize) -> Result<Vec<TrackSummary>, AppError> {
+impl MusicSearchPort for TantivySearchAdapter {
+    async fn autocomplete(
+        &self,
+        query: &str,
+        filter: SearchFilter,
+        limit: usize,
+    ) -> Result<Vec<SearchResult>, AppError> {
         // Tantivy searching is CPU-bound and synchronous.
         // spawn_blocking prevents it from stalling the async executor
         // under concurrent autocomplete requests.
         let searcher = self.searcher.clone(); // cheap: Arc<IndexReader> clone
         let query = query.to_owned();
 
-        tokio::task::spawn_blocking(move || searcher.search(&query, limit))
+        tokio::task::spawn_blocking(move || searcher.search(&query, &filter, limit))
             .await
             .map_err(|e| AppError::Search {
                 kind: SearchErrorKind::ReadFailed,
@@ -166,5 +198,44 @@ impl TrackSearchPort for TantivySearchAdapter {
 
     async fn reindex_track(&self, track_id: Uuid) -> Result<(), AppError> {
         self.reindex_one(track_id).await
+    }
+
+    async fn add_search_results(&self, results: Vec<SearchResult>) -> Result<(), AppError> {
+        let mut w = self.writer.lock().await;
+
+        for result in &results {
+            // Delete existing doc by video_id to prevent duplicates
+            if let Some(vid) = &result.youtube_video_id {
+                let id_term = tantivy::Term::from_field_text(self.schema.youtube_video_id, vid);
+                w.delete_term(id_term);
+            }
+
+            w.add_document(result.to_search_doc(&self.schema)).map_err(
+                |e: tantivy::TantivyError| AppError::Search {
+                    kind: SearchErrorKind::WriteFailed,
+                    detail: e.to_string(),
+                },
+            )?;
+        }
+
+        w.commit()
+            .map_err(|e: tantivy::TantivyError| AppError::Search {
+                kind: SearchErrorKind::WriteFailed,
+                detail: e.to_string(),
+            })?;
+
+        Ok(())
+    }
+
+    async fn delete_search_result(&self, video_id: &str) -> Result<(), AppError> {
+        let mut w = self.writer.lock().await;
+        let id_term = tantivy::Term::from_field_text(self.schema.youtube_video_id, video_id);
+        w.delete_term(id_term);
+        w.commit()
+            .map_err(|e: tantivy::TantivyError| AppError::Search {
+                kind: SearchErrorKind::WriteFailed,
+                detail: e.to_string(),
+            })?;
+        Ok(())
     }
 }

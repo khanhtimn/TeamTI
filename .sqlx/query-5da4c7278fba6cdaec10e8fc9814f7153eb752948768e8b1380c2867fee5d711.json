@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \n                id, video_id, title, uploader, channel_id, duration_ms, thumbnail_url, query, track_id, created_at, last_seen_at\n            FROM youtube_search_cache\n            WHERE video_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "video_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "uploader",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "channel_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "duration_ms",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "thumbnail_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "query",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "track_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "5da4c7278fba6cdaec10e8fc9814f7153eb752948768e8b1380c2867fee5d711"
+}

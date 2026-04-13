@@ -6,11 +6,11 @@ use tracing::{info, warn};
 
 use crate::events::{AcoustIdRequest, TrackScanned};
 use crate::ports::repository::TrackRepository;
-use crate::ports::search::TrackSearchPort;
+use crate::ports::search::MusicSearchPort;
 
 pub struct EnrichmentOrchestrator {
     pub repo: Arc<dyn TrackRepository>,
-    pub search_port: Arc<dyn TrackSearchPort>,
+    pub search_port: Arc<dyn MusicSearchPort>,
     pub scan_interval_secs: u64,
     pub failed_retry_limit: i32,
     pub unmatched_retry_limit: i32,

@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            t.id                                                     AS \"track_id!: Uuid\",\n            t.title                                                  AS \"title!\",\n            t.artist_display,\n            t.year,\n            t.bpm,\n            COALESCE(t.genres, '{}'::text[])                         AS \"track_genres!: Vec<String>\",\n            al.title                                                 AS \"album_title?\",\n            COALESCE(al.genres, '{}'::text[])                        AS \"album_genres!: Vec<String>\",\n            COALESCE(\n                array_agg(ar.name)      FILTER (WHERE ta.role = 'primary'),\n                '{}'::text[]\n            )                                                        AS \"primary_artists!: Vec<String>\",\n            COALESCE(\n                array_agg(ar.sort_name) FILTER (WHERE ta.role = 'primary'),\n                '{}'::text[]\n            )                                                        AS \"artist_sort_names!: Vec<String>\",\n            COALESCE(\n                array_agg(ar.name)      FILTER (WHERE ta.role = 'composer'),\n                '{}'::text[]\n            )                                                        AS \"composers!: Vec<String>\",\n            COALESCE(\n                array_agg(ar.name)      FILTER (WHERE ta.role = 'lyricist'),\n                '{}'::text[]\n            )                                                        AS \"lyricists!: Vec<String>\",\n            COALESCE(\n                array_agg(ar.name)      FILTER (WHERE ta.role = 'featuring'),\n                '{}'::text[]\n            )                                                        AS \"featured_artists!: Vec<String>\",\n            t.source                                                 AS \"source!\",\n            t.youtube_video_id                                       AS \"youtube_video_id?\",\n            t.youtube_uploader                                       AS \"youtube_uploader?\",\n            t.duration_ms                                            AS \"duration_ms?\",\n            COALESCE(SUM(gts.play_count), 0)                         AS \"play_count: i64\"\n        FROM tracks t\n        LEFT JOIN albums            al ON al.id       = t.album_id\n        LEFT JOIN track_artists     ta ON ta.track_id = t.id\n        LEFT JOIN artists           ar ON ar.id       = ta.artist_id\n        LEFT JOIN guild_track_stats gts ON gts.track_id = t.id\n        WHERE t.id = $1\n        GROUP BY t.id, al.title, al.genres\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "track_id!: Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "artist_display",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "year",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "bpm",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "track_genres!: Vec<String>",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 6,
+        "name": "album_title?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "album_genres!: Vec<String>",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 8,
+        "name": "primary_artists!: Vec<String>",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 9,
+        "name": "artist_sort_names!: Vec<String>",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 10,
+        "name": "composers!: Vec<String>",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 11,
+        "name": "lyricists!: Vec<String>",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 12,
+        "name": "featured_artists!: Vec<String>",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 13,
+        "name": "source!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "youtube_video_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "youtube_uploader?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "duration_ms?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 17,
+        "name": "play_count: i64",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      null,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      false,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "dfb83666a6dcc2545130c79758093a1f62030e96faf762e17b91daa5af2b1432"
+}

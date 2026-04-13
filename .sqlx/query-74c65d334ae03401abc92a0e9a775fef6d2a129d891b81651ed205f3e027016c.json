@@ -1,0 +1,80 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id, video_id, title, uploader, channel_id, duration_ms, thumbnail_url, query, track_id, created_at, last_seen_at\n        FROM youtube_search_cache\n        WHERE track_id IS NULL AND video_id NOT IN (\n            SELECT youtube_video_id FROM tracks WHERE youtube_video_id IS NOT NULL\n        )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "video_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "uploader",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "channel_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "duration_ms",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "thumbnail_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "query",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "track_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "74c65d334ae03401abc92a0e9a775fef6d2a129d891b81651ed205f3e027016c"
+}

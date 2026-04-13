@@ -4,7 +4,7 @@ use serenity::builder::{CreateCommand, EditInteractionResponse};
 use serenity::model::application::CommandInteraction;
 use serenity::model::permissions::Permissions;
 
-use application::ports::search::TrackSearchPort;
+use application::ports::MusicSearchPort;
 
 pub fn register() -> CreateCommand<'static> {
     CreateCommand::new("rescan")
@@ -15,7 +15,7 @@ pub fn register() -> CreateCommand<'static> {
 pub async fn run(
     http: &serenity::all::Http,
     interaction: &CommandInteraction,
-    search_port: &Arc<dyn TrackSearchPort>,
+    search_port: &Arc<dyn MusicSearchPort>,
 ) {
     let _ = interaction.defer_ephemeral(http).await;
 

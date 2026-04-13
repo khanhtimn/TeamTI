@@ -26,3 +26,5 @@ tracing = { workspace = true, features = ["default"] }
 uuid = { workspace = true, features = ["v4", "serde", "fast-rng"] }
 chrono = { workspace = true, features = ["clock"] }
 fastrand = { workspace = true, features = ["std"] }
+moka = { workspace = true, features = ["future", "logging"] }
+dashmap = { workspace = true }

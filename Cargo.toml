@@ -51,12 +51,13 @@ dotenvy = { version = "0.15", default-features = false }
 async-trait = { version = "0.1", default-features = false }
 bytes = { version = "1", default-features = false }
 nonzero_ext = { version = "0.3", default-features = false }
-lofty = { version = "0.23", default-features = false }
+lofty = { version = "0.24", default-features = false }
 notify = { version = "8", default-features = false }
 unicode-normalization = { version = "0.1", default-features = false }
 fastrand = { version = "2.4", default-features = false }
 tempfile = { version = "3.27", default-features = false }
 sanitize-filename = { version = "0.6", default-features = false }
+moka = { version = "0.12", default-features = false }
 
 
 [profile.release]

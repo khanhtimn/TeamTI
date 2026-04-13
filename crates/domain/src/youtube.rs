@@ -40,3 +40,19 @@ pub struct NewYoutubeDownloadJob {
     pub track_id: uuid::Uuid,
     pub url: String,
 }
+
+/// Row model for `youtube_search_cache` table.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct YoutubeSearchCacheRow {
+    pub id: uuid::Uuid,
+    pub video_id: String,
+    pub title: String,
+    pub uploader: Option<String>,
+    pub channel_id: Option<String>,
+    pub duration_ms: Option<i32>,
+    pub thumbnail_url: Option<String>,
+    pub query: String,
+    pub track_id: Option<uuid::Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub last_seen_at: DateTime<Utc>,
+}

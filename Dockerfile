@@ -34,11 +34,16 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libopus0 libssl3 \
     python3 python3-venv pipx \
-    nodejs \
+    unzip \
     wget xz-utils \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
+
+# Install deno (required for yt-dlp-ejs)
+RUN wget -qO /tmp/deno.zip https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip && \
+    unzip -q /tmp/deno.zip -d /usr/local/bin/ && \
+    rm /tmp/deno.zip
 
 # Install yt-dlp and inject yt-dlp-ejs natively isolated
 ENV PATH="/root/.local/bin:${PATH}"

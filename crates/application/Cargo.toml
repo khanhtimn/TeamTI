@@ -15,4 +15,4 @@ chrono = { workspace = true, features = ["serde", "clock"] }
 bytes.workspace = true
 tracing = { workspace = true, features = ["default"] }
 dashmap = { workspace = true }
-
+moka = { workspace = true, features = ["future", "logging"] }

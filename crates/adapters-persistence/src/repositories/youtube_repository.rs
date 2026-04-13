@@ -420,3 +420,110 @@ impl YoutubeRepository for PgYoutubeRepository {
         Ok(result.rows_affected())
     }
 }
+
+#[async_trait]
+impl application::ports::repository::YoutubeSearchRepository for PgYoutubeRepository {
+    async fn upsert_search_result(
+        &self,
+        query: &str,
+        result: &domain::VideoMetadata,
+    ) -> Result<(), AppError> {
+        let title = result
+            .track_title
+            .as_deref()
+            .unwrap_or_else(|| result.title.as_deref().unwrap_or("Unknown Title"));
+
+        sqlx::query!(
+            r#"
+            INSERT INTO youtube_search_cache (
+                video_id, title, uploader, channel_id, duration_ms, thumbnail_url, query
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7
+            )
+            ON CONFLICT (video_id) DO UPDATE SET
+                last_seen_at    = now(),
+                title           = COALESCE(EXCLUDED.title, youtube_search_cache.title),
+                uploader        = COALESCE(EXCLUDED.uploader, youtube_search_cache.uploader),
+                channel_id      = COALESCE(EXCLUDED.channel_id, youtube_search_cache.channel_id),
+                duration_ms     = COALESCE(EXCLUDED.duration_ms, youtube_search_cache.duration_ms),
+                thumbnail_url   = COALESCE(EXCLUDED.thumbnail_url, youtube_search_cache.thumbnail_url)
+            "#,
+            result.video_id,
+            title,
+            result.uploader,
+            result.channel_id,
+            result.duration_ms.map(|v| v as i32),
+            result.thumbnail_url,
+            query,
+        )
+        .execute(&self.db.0)
+        .await
+        .map_err(crate::db_err!("youtube_search.upsert"))?;
+
+        Ok(())
+    }
+
+    async fn find_search_cache_by_video_id(
+        &self,
+        video_id: &str,
+    ) -> Result<Option<domain::youtube::YoutubeSearchCacheRow>, AppError> {
+        let row = sqlx::query_as!(
+            domain::youtube::YoutubeSearchCacheRow,
+            r#"
+            SELECT 
+                id, video_id, title, uploader, channel_id, duration_ms, thumbnail_url, query, track_id, created_at, last_seen_at
+            FROM youtube_search_cache
+            WHERE video_id = $1
+            "#,
+            video_id
+        )
+        .fetch_optional(&self.db.0)
+        .await
+        .map_err(crate::db_err!("youtube_search.find_by_vid"))?;
+
+        Ok(row)
+    }
+
+    async fn find_existing_video_ids(
+        &self,
+        video_ids: &[String],
+    ) -> Result<std::collections::HashSet<String>, AppError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT youtube_video_id
+            FROM tracks
+            WHERE youtube_video_id = ANY($1)
+            "#,
+            video_ids
+        )
+        .fetch_all(&self.db.0)
+        .await
+        .map_err(crate::db_err!("youtube_search.find_existing"))?;
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| r.youtube_video_id)
+            .collect())
+    }
+
+    async fn link_search_cache_to_track(
+        &self,
+        video_id: &str,
+        track_id: Uuid,
+    ) -> Result<(), AppError> {
+        sqlx::query!(
+            r#"
+            UPDATE youtube_search_cache
+            SET track_id = $2
+            WHERE video_id = $1
+            "#,
+            video_id,
+            track_id,
+        )
+        .execute(&self.db.0)
+        .await
+        .map_err(crate::db_err!("youtube_search.link_track"))?;
+
+        Ok(())
+    }
+}

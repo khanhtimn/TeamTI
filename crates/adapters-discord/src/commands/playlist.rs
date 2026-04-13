@@ -15,8 +15,8 @@ use adapters_voice::player::{enqueue_track, join_channel};
 use adapters_voice::state::QueuedTrack;
 use adapters_voice::state_map::GuildStateMap;
 
+use application::ports::MusicSearchPort;
 use application::ports::playlist::PlaylistPort;
-use application::ports::search::TrackSearchPort;
 use serenity::all::Cache;
 use serenity::model::id::ChannelId;
 use std::path::Path;
@@ -219,7 +219,7 @@ pub async fn autocomplete(
     http: &Http,
     interaction: &CommandInteraction,
     playlist_port: &Arc<dyn PlaylistPort>,
-    search_port: &Arc<dyn TrackSearchPort>,
+    search_port: &Arc<dyn MusicSearchPort>,
 ) {
     use serenity::model::application::CommandDataOptionValue;
 
@@ -365,14 +365,17 @@ async fn autocomplete_accessible_playlists(
 async fn autocomplete_tracks(
     http: &Http,
     interaction: &CommandInteraction,
-    search_port: &Arc<dyn TrackSearchPort>,
+    search_port: &Arc<dyn MusicSearchPort>,
     query: &str,
 ) {
-    match search_port.autocomplete(query, 25).await {
+    match search_port
+        .autocomplete(query, domain::search::SearchFilter::All, 25)
+        .await
+    {
         Ok(results) => {
             let choices: Vec<_> = results
                 .into_iter()
-                .map(|r| {
+                .filter_map(|r| {
                     let raw = if let Some(artist) = &r.artist_display {
                         format!("{} — {}", r.title, artist)
                     } else {
@@ -384,7 +387,19 @@ async fn autocomplete_tracks(
                     } else {
                         raw
                     };
-                    serenity::builder::AutocompleteChoice::new(display, r.id.to_string())
+                    let submission_value = match (r.track_id, r.youtube_video_id) {
+                        (Some(tid), _) => {
+                            domain::autocomplete::SubmissionValue::TrackId(tid).serialize()
+                        }
+                        (None, Some(vid)) => {
+                            domain::autocomplete::SubmissionValue::YoutubeVideoId(vid).serialize()
+                        }
+                        _ => return None,
+                    };
+                    Some(serenity::builder::AutocompleteChoice::new(
+                        display,
+                        submission_value,
+                    ))
                 })
                 .collect();
 
@@ -962,7 +977,11 @@ fn extract_uuid_option(
     opts.iter()
         .find(|o| o.name == name)
         .and_then(|o| match o.value {
-            ResolvedValue::String(s) => uuid::Uuid::parse_str(s).ok(),
+            ResolvedValue::String(s) => match domain::autocomplete::SubmissionValue::deserialize(s)
+            {
+                Ok(domain::autocomplete::SubmissionValue::TrackId(id)) => Some(id),
+                _ => uuid::Uuid::parse_str(s).ok(),
+            },
             _ => None,
         })
 }

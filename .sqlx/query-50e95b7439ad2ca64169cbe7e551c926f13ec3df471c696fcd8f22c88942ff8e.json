@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO youtube_search_cache (\n                video_id, title, uploader, channel_id, duration_ms, thumbnail_url, query\n            ) VALUES (\n                $1, $2, $3, $4, $5, $6, $7\n            )\n            ON CONFLICT (video_id) DO UPDATE SET\n                last_seen_at    = now(),\n                title           = COALESCE(EXCLUDED.title, youtube_search_cache.title),\n                uploader        = COALESCE(EXCLUDED.uploader, youtube_search_cache.uploader),\n                channel_id      = COALESCE(EXCLUDED.channel_id, youtube_search_cache.channel_id),\n                duration_ms     = COALESCE(EXCLUDED.duration_ms, youtube_search_cache.duration_ms),\n                thumbnail_url   = COALESCE(EXCLUDED.thumbnail_url, youtube_search_cache.thumbnail_url)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "50e95b7439ad2ca64169cbe7e551c926f13ec3df471c696fcd8f22c88942ff8e"
+}

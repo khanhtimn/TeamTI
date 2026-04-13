@@ -22,19 +22,28 @@ use metadata::YtDlpJson;
 pub struct YtDlpAdapter {
     binary: String,
     cookies_file: Option<String>,
+    ffmpeg_location: Option<String>,
 }
 
 impl YtDlpAdapter {
     #[must_use]
-    pub fn new(binary: String, cookies_file: Option<String>) -> Self {
+    pub fn new(
+        binary: String,
+        cookies_file: Option<String>,
+        ffmpeg_location: Option<String>,
+    ) -> Self {
         Self {
             binary,
             cookies_file,
+            ffmpeg_location,
         }
     }
 
     fn base_cmd(&self) -> Command {
         let mut cmd = Command::new(&self.binary);
+        if let Some(ref loc) = self.ffmpeg_location {
+            cmd.arg("--ffmpeg-location").arg(loc);
+        }
         cmd.kill_on_drop(true);
         cmd.arg("--no-check-certificates").arg("--no-playlist");
         if let Some(ref cookies) = self.cookies_file {
@@ -163,6 +172,32 @@ impl YtDlpPort for YtDlpAdapter {
         Ok(Some(parsed.into_video_metadata()))
     }
 
+    async fn search_top_n(&self, query: &str, n: usize) -> Result<Vec<VideoMetadata>, AppError> {
+        let mut cmd = self.base_cmd();
+        let search_query = format!("ytsearch{n}:{query}");
+        cmd.arg("--dump-json")
+            .arg("--skip-download")
+            .arg(&search_query);
+
+        let json_str = self.run_json(&mut cmd, Duration::from_secs(60)).await?;
+        let mut results = Vec::new();
+
+        for line in json_str.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            match serde_json::from_str::<YtDlpJson>(line) {
+                Ok(entry) => results.push(entry.into_video_metadata()),
+                Err(e) => {
+                    warn!("skipping unparseable search result entry: {e}");
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
     async fn download_audio(&self, url: &str, output_path: &Path) -> Result<(), AppError> {
         let dir = output_path.parent().unwrap_or_else(|| Path::new("."));
 
@@ -179,6 +214,9 @@ impl YtDlpPort for YtDlpAdapter {
             .into_temp_path();
 
         let mut cmd = Command::new(&self.binary);
+        if let Some(ref loc) = self.ffmpeg_location {
+            cmd.arg("--ffmpeg-location").arg(loc);
+        }
         cmd.kill_on_drop(true);
         cmd.arg("--no-check-certificates");
         if let Some(ref cookies) = self.cookies_file {

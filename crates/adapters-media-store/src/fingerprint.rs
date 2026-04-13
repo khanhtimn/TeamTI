@@ -117,7 +117,7 @@ pub async fn run_fingerprint_worker(
                                     .file_stem()
                                     .and_then(|s| s.to_str())
                                     .unwrap_or("");
-                                let vid = file_stem.rsplit('_').next().map(|s| s.to_string());
+                                let vid = file_stem.rsplit('_').next().map(ToString::to_string);
                                 (vid, "youtube".to_string())
                             } else {
                                 (None, "local".to_string())

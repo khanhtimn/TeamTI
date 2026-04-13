@@ -6,27 +6,34 @@ use serenity::model::application::Command;
 use serenity::model::event::FullEvent;
 use serenity::prelude::{Context, EventHandler};
 
+use crate::commands::play::{AutocompleteCache, UserAutocompleteState};
 use adapters_persistence::repositories::track_repository::PgTrackRepository;
 use adapters_voice::lifecycle::TrackLifecycleTx;
 use application::YoutubeDownloadWorker;
 use application::ports::playlist::PlaylistPort;
 use application::ports::recommendation::RecommendationPort;
-use application::ports::search::TrackSearchPort;
+use application::ports::repository::YoutubeSearchRepository;
+use application::ports::search::MusicSearchPort;
 use application::ports::user_library::UserLibraryPort;
 use application::ports::youtube::YoutubeRepository;
 use application::ports::ytdlp::YtDlpPort;
+use application::youtube_search_worker::YoutubeSearchWorker;
 
 #[derive(Clone)]
 pub struct DiscordEventHandler {
     pub discord_guild_id: u64,
     pub track_repo: Arc<PgTrackRepository>,
-    pub search_port: Arc<dyn TrackSearchPort>,
+    pub search_port: Arc<dyn MusicSearchPort>,
     pub playlist_port: Arc<dyn PlaylistPort>,
     pub user_library_port: Arc<dyn UserLibraryPort>,
     pub recommendation_port: Arc<dyn RecommendationPort>,
-    pub youtube_repo: Arc<dyn YoutubeRepository>,
+    pub youtube_repo: Arc<dyn YoutubeRepository + 'static>,
+    pub youtube_search_repo: Arc<dyn YoutubeSearchRepository>,
     pub ytdlp_port: Arc<dyn YtDlpPort>,
     pub youtube_worker: Arc<YoutubeDownloadWorker>,
+    pub youtube_search_worker: Arc<YoutubeSearchWorker>,
+    pub ac_cache: Arc<AutocompleteCache>,
+    pub user_state: Arc<dashmap::DashMap<String, UserAutocompleteState>>,
     pub media_root: PathBuf,
     pub ytdlp_binary: String,
     pub auto_leave_secs: u64,
@@ -121,6 +128,7 @@ impl EventHandler for DiscordEventHandler {
                                     &self.lifecycle_tx,
                                     &self.search_port,
                                     &self.youtube_repo,
+                                    &self.youtube_search_repo,
                                     &self.ytdlp_port,
                                     &self.youtube_worker,
                                     &self.ytdlp_binary,
@@ -286,6 +294,12 @@ impl EventHandler for DiscordEventHandler {
                                 &self.search_port,
                                 &self.user_library_port,
                                 &self.recommendation_port,
+                                &self.ac_cache,
+                                &self.user_state,
+                                &self.youtube_search_worker,
+                                &self.youtube_repo,
+                                &self.youtube_search_repo,
+                                &self.ytdlp_port,
                             )
                             .await;
                         }

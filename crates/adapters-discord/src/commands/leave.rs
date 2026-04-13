@@ -35,11 +35,27 @@ pub async fn run(
             return;
         }
 
-        // C4 audit fix: use shared cleanup to ensure identical teardown
-        // as auto-leave timer. Songbird queue is cleared in leave_channel().
+        let text_channel_id = state.text_channel_id;
+        let np_msg_id = state.now_playing_msg;
+
+        // use shared cleanup to ensure identical teardown as auto-leave timer
+        // Songbird queue is cleared in leave_channel()
         state.cleanup_on_leave();
 
         drop(state);
+
+        // Edit the Now Playing message to "Queue Ended" so the UI is updated instantly
+        if let (Some(channel_id), Some(msg_id)) = (text_channel_id, np_msg_id) {
+            adapters_voice::track_event_handler::post_now_playing(
+                http,
+                channel_id,
+                guild_id,
+                &state_lock,
+                None,
+                Some(msg_id),
+            )
+            .await;
+        }
     } else {
         let _ = interaction
             .edit_response(

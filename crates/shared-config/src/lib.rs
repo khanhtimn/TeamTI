@@ -109,6 +109,9 @@ pub struct Config {
     /// Optional: path to Netscape-format cookies file for bot detection bypass.
     pub ytdlp_cookies_file: Option<String>,
 
+    /// Optional: explicitly declare the location of ffmpeg (either path to binary or containing directory)
+    pub ytdlp_ffmpeg_location: Option<String>,
+
     /// Max simultaneous yt-dlp download processes. Default: 2.
     pub ytdlp_download_concurrency: usize,
 
@@ -165,6 +168,9 @@ impl Config {
             analysis_poll_secs: parse_env("ANALYSIS_POLL_SECS", 30u64)?,
             ytdlp_binary: std::env::var("YTDLP_BINARY").unwrap_or_else(|_| "yt-dlp".to_string()),
             ytdlp_cookies_file: std::env::var("YTDLP_COOKIES_FILE")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            ytdlp_ffmpeg_location: std::env::var("YTDLP_FFMPEG_LOCATION")
                 .ok()
                 .filter(|s| !s.is_empty()),
             ytdlp_download_concurrency: parse_env("YTDLP_DOWNLOAD_CONCURRENCY", 2usize)?,

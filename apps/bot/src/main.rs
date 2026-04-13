@@ -33,7 +33,7 @@ use application::events::{ToCoverArt, ToLastFm, ToLyrics, ToMusicBrainz, ToTagWr
 use application::ports::playlist::PlaylistPort;
 use application::ports::recommendation::RecommendationPort;
 use application::ports::repository::{AlbumRepository, ArtistRepository, TrackRepository};
-use application::ports::search::TrackSearchPort;
+use application::ports::search::MusicSearchPort;
 use application::ports::user_library::UserLibraryPort;
 use application::ports::youtube::YoutubeRepository;
 use application::tag_writer_worker::run_startup_tag_poller;
@@ -134,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let search_port: Arc<dyn TrackSearchPort> = Arc::new(
+    let search_port: Arc<dyn MusicSearchPort> = Arc::new(
         TantivySearchAdapter::open_or_create(&config.tantivy_index_path, db.0.clone())
             .expect("failed to open Tantivy search index"),
     );
@@ -333,7 +333,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // ── YouTube infrastructure ──────────────────────────────────────────
-    let youtube_repo: Arc<dyn YoutubeRepository> = Arc::new(PgYoutubeRepository::new(db.clone()));
+    let pg_youtube_repo = Arc::new(PgYoutubeRepository::new(db.clone()));
+    let youtube_repo: Arc<dyn YoutubeRepository + 'static> = pg_youtube_repo.clone();
+    let youtube_search_repo: Arc<dyn application::ports::repository::YoutubeSearchRepository> =
+        pg_youtube_repo;
 
     // Reset stale 'downloading' jobs from a previous crash
     let yt_stale_reset = youtube_repo
@@ -350,6 +353,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ytdlp_adapter: Arc<dyn application::ports::ytdlp::YtDlpPort> = Arc::new(YtDlpAdapter::new(
         config.ytdlp_binary.clone(),
         config.ytdlp_cookies_file.clone(),
+        config.ytdlp_ffmpeg_location.clone(),
     ));
 
     let youtube_worker = Arc::new(YoutubeDownloadWorker {
@@ -362,6 +366,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_attempts: config.ytdlp_max_download_attempts,
         in_flight: Arc::new(dashmap::DashSet::new()),
     });
+
+    let youtube_search_worker = Arc::new(
+        application::youtube_search_worker::YoutubeSearchWorker::new(
+            Arc::clone(&youtube_search_repo),
+            Arc::clone(&ytdlp_adapter),
+            Arc::clone(&search_port),
+        ),
+    );
+
+    let ac_cache: Arc<adapters_discord::commands::play::AutocompleteCache> = Arc::new(
+        moka::future::Cache::builder()
+            .time_to_idle(std::time::Duration::from_hours(1))
+            .max_capacity(10_000)
+            .build(),
+    );
+    let user_state = Arc::new(dashmap::DashMap::new());
 
     let intents = GatewayIntents::GUILDS
         | GatewayIntents::GUILD_VOICE_STATES
@@ -380,8 +400,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         user_library_port: Arc::clone(&user_library_port),
         recommendation_port: Arc::clone(&recommendation_port),
         youtube_repo: Arc::clone(&youtube_repo),
+        youtube_search_repo: Arc::clone(&youtube_search_repo),
         ytdlp_port: Arc::clone(&ytdlp_adapter),
         youtube_worker: Arc::clone(&youtube_worker),
+        youtube_search_worker: Arc::clone(&youtube_search_worker),
+        ac_cache: Arc::clone(&ac_cache),
+        user_state: Arc::clone(&user_state),
         media_root: config.media_root.clone(),
         ytdlp_binary: config.ytdlp_binary.clone(),
         auto_leave_secs: config.auto_leave_secs,
